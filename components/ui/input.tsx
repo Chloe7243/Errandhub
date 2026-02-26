@@ -19,8 +19,10 @@ const Input = ({
   value,
   onChangeText,
   onBlur,
+  multiline,
   containerStyle,
   inputStyle,
+  wrapperStyle,
   leftIcon,
 }: InputProps) => {
   const colorScheme = useColorScheme();
@@ -35,10 +37,17 @@ const Input = ({
         </Text>
       )}
 
-      <View style={[styles.inputWrapper, { backgroundColor: colors.surface }]}>
+      <View
+        style={[
+          styles.inputWrapper,
+          wrapperStyle,
+          { backgroundColor: colors.surface },
+        ]}
+      >
         {leftIcon && <View style={styles.iconLeft}>{leftIcon}</View>}
         <TextInput
           value={value}
+          multiline={multiline}
           onChangeText={onChangeText}
           onBlur={onBlur}
           placeholder={placeholder}

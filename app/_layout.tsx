@@ -32,13 +32,14 @@ function RootLayoutNav() {
   const router = useRouter();
   const segments = useSegments();
   const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
+  console.log({ isAuthenticated, segments });
 
   useEffect(() => {
     const inProtected = segments[0] === "(protected)";
     if (!isAuthenticated && inProtected) {
       router.replace("/");
     } else if (isAuthenticated && !inProtected) {
-      router.replace("/(protected)/role-selection");
+      router.replace("/role-selection");
     }
   }, [isAuthenticated, segments]);
 

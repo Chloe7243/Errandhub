@@ -106,6 +106,7 @@ const styles = StyleSheet.create({
   buttonsContainer: {
     width: "90%",
     display: "flex",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 16,
     marginVertical: 32,
