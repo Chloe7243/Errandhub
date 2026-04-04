@@ -3,7 +3,7 @@
   "private": true,
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "shared"
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=apps/backend\" \"npm run start --workspace=apps/frontend\"",

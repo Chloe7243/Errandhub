@@ -1,0 +1,147 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ErrandStatus {
+  POSTED
+  ACCEPTED
+  IN_PROGRESS
+  REVIEWING
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum PaymentStatus {
+  PENDING
+  HELD
+  RELEASED
+  REFUNDED
+  DISPUTED
+}
+
+enum ErrandType {
+  PICKUP_DELIVERY
+  SHOPPING
+}
+
+enum Complexity {
+  QUICK
+  STANDARD
+  COMPLEX
+}
+
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  firstName        String
+  lastName         String
+  phone            String
+  passwordHash     String
+  avatarUrl        String?
+  isVerified       Boolean   @default(false)
+  stripeAccountId  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  requestedErrands Errand[]  @relation("RequesterErrands")
+  helpingErrands   Errand[]  @relation("HelperErrands")
+  messages         Message[] @relation("UserMessages")
+  raisedDisputes   Dispute[] @relation("RaisedDisputes")
+}
+
+model Errand {
+  id              String       @id @default(cuid())
+  requesterId     String
+  helperId        String?
+  title           String
+  description     String
+  pickupLocation  String
+  dropoffLocation String
+  helperPayment   Float
+  status          ErrandStatus @default(POSTED)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  proofImageUrl   String?
+  proofNote       String?
+  completedAt     DateTime?
+  type            ErrandType
+  complexity      Complexity
+
+  payment   PaymentTransaction? @relation("ErrandPayment")
+  messages  Message[]           @relation("ErrandMessages")
+  helper    User?               @relation("HelperErrands", fields: [helperId], references: [id])
+  requester User                @relation("RequesterErrands", fields: [requesterId], references: [id])
+  dispute   Dispute?
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  errandId  String
+  senderId  String
+  content   String?
+  imageUrl  String?
+  createdAt DateTime @default(now())
+
+  errand Errand @relation("ErrandMessages", fields: [errandId], references: [id])
+  sender User   @relation("UserMessages", fields: [senderId], references: [id])
+}
+
+model PaymentTransaction {
+  id              String        @id @default(cuid())
+  errandId        String        @unique
+  amount          Float
+  helperFee       Float
+  stripeFee       Float
+  stripePaymentId String?
+  status          PaymentStatus @default(PENDING)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  errand Errand @relation("ErrandPayment", fields: [errandId], references: [id])
+}
+
+// model Rating {
+//   id         String   @id @default(cuid())
+//   errandId   String   @unique
+//   raterId    String
+//   ratedId    String
+//   score      Int
+//   comment    String?
+//   createdAt  DateTime @default(now())
+
+//   errand Errand @relation(fields: [errandId], references: [id])
+//   rater  User   @relation("GivenRatings", fields: [raterId], references: [id])
+//   rated  User   @relation("ReceivedRatings", fields: [ratedId], references: [id])
+// }
+
+model Dispute {
+  id          String        @id @default(cuid())
+  errandId    String        @unique
+  raisedById  String
+  reason      String
+  explanation String
+  status      DisputeStatus @default(OPEN)
+  resolution  String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  errand   Errand @relation(fields: [errandId], references: [id])
+  raisedBy User   @relation("RaisedDisputes", fields: [raisedById], references: [id])
+}
