@@ -1,19 +1,24 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { store } from "@/store";
-import { useAppSelector } from "@/store/hooks";
+import { jwtDecode } from "jwt-decode";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   DarkTheme,
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { SplashScreen, Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import "react-native-reanimated";
 import { Provider } from "react-redux";
+import Toast from "react-native-toast-message";
+import { getToken } from "@/utils/secure-store";
+import { AuthState, loginUser } from "@/store/slices";
+import { User } from "@/types/user";
 
-// SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
   anchor: "index",
@@ -28,32 +33,40 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
   const router = useRouter();
-  const segments = useSegments();
-  const isAuthenticated = useAppSelector((state) => state.auth.isAuthenticated);
-  console.log({ isAuthenticated, segments });
+  const dispatch = useAppDispatch();
+  const colorScheme = useColorScheme();
+  const [isReady, setIsReady] = useState(false);
+  const { isAuthenticated, user } = useAppSelector(
+    (state) => state.auth,
+  ) as AuthState;
 
   useEffect(() => {
-    const inProtected = segments[0] === "(protected)";
-    if (!isAuthenticated && inProtected) {
-      router.replace("/");
-    } else if (isAuthenticated && !inProtected) {
-      router.replace("/role-selection");
+    async function prepare() {
+      try {
+        const token = await getToken();
+        if (token) {
+          const user = jwtDecode<User>(token);
+          dispatch(loginUser({ user, token }));
+        }
+      } finally {
+        setIsReady(true);
+        await SplashScreen.hideAsync(); // hide when ready
+      }
     }
-  }, [isAuthenticated, segments]);
+    prepare();
+  }, []);
 
-  // useEffect(() => {
-  //   async function prepare() {
-  //     try {
-  //       setTimeout(() => {}, 2000);
-  //       // Load fonts, check auth token, anything you need here
-  //     } finally {
-  //       await SplashScreen.hideAsync(); // hide when ready
-  //     }
-  //   }
-  //   prepare();
-  // }, []);
+  useEffect(() => {
+    if (!isReady) return;
+    if (!isAuthenticated) {
+      router.replace("/");
+    } else if (isAuthenticated && !user?.role) {
+      router.replace("/role-selection");
+    } else if (isAuthenticated && user?.role) {
+      router.replace(`/${user.role}/home`);
+    }
+  }, [isAuthenticated, user?.role]);
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
@@ -63,6 +76,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(protected)" options={{ headerShown: false }} />
       </Stack>
       <StatusBar style="auto" />
+      <Toast />
     </ThemeProvider>
   );
 }

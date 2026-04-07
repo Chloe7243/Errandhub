@@ -1,5 +1,10 @@
-import BackButton from "@/components/ui/back-button";
 import { Colors } from "@/constants/theme";
+import LoadingSpinner from "@/components/ui/loading-spinner";
+import { useSelectRoleMutation } from "@/store/api";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { loginUser } from "@/store/slices";
+import { User } from "@/types";
+import { Role } from "@errandhub/shared";
 import FontAwesome5 from "@expo/vector-icons/FontAwesome5";
 import { router } from "expo-router";
 import React from "react";
@@ -12,23 +17,60 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 
 const RoleSelection = () => {
+  const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
-  const [isSelected, setIsSelected] = React.useState<
-    "requester" | "helper" | null
-  >(null);
+  const [selectRole, { isLoading }] = useSelectRoleMutation();
+  const user = useAppSelector((state) => state.auth.user) as User;
+  const [isSelected, setIsSelected] = React.useState<Role | null>(null);
 
+  console.log("User in role selection:", user);
+
+  const handleRoleSelection = async () => {
+    if (isLoading) return;
+    if (!isSelected) {
+      Toast.show({
+        type: "error",
+        text1: "No role selected",
+        text2: "Please select a role to continue.",
+      });
+    } else {
+      try {
+        const response = await selectRole({
+          userId: user.userId,
+          role: isSelected,
+        }).unwrap();
+        console.log("Role selection response:", response);
+        dispatch(
+          loginUser({
+            user: response.user,
+            token: response.token,
+          }),
+        );
+        router.replace(
+          isSelected === "helper" ? "/helper/home" : "/requester/home",
+        );
+      } catch (err) {
+        console.error("Login failed:", err);
+        Toast.show({
+          type: "error",
+          text1: "Failed to select role",
+          text2: "Please try again.",
+        });
+      }
+    }
+  };
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <BackButton />
       <View style={{ flex: 1, display: "flex", gap: 32 }}>
         <View style={styles.header}>
           <Text style={[styles.headerText, { color: colors.text }]}>
-            Welcome, {"Alex"}
+            Welcome, {user?.firstName}!
           </Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             How would you like to use ErrandHub today?
@@ -119,15 +161,15 @@ const RoleSelection = () => {
 
       <TouchableOpacity
         style={[styles.button, { backgroundColor: colors.primary }]}
-        onPress={() =>
-          isSelected && isSelected === "helper"
-            ? router.replace("/helper/home")
-            : router.replace("/requester/home")
-        }
+        onPress={handleRoleSelection}
       >
-        <Text style={[styles.buttonText, { color: colors.text }]}>
-          Continue
-        </Text>
+        {isLoading ? (
+          <LoadingSpinner color="#fff" size="small" />
+        ) : (
+          <Text style={[styles.buttonText, { color: colors.text }]}>
+            Continue
+          </Text>
+        )}
       </TouchableOpacity>
     </SafeAreaView>
   );

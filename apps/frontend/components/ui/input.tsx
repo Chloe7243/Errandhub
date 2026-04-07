@@ -23,6 +23,7 @@ const Input = ({
   containerStyle,
   inputStyle,
   wrapperStyle,
+  keyboardType,
   leftIcon,
 }: InputProps) => {
   const colorScheme = useColorScheme();
@@ -48,6 +49,7 @@ const Input = ({
         <TextInput
           value={value}
           multiline={multiline}
+          keyboardType={keyboardType}
           onChangeText={onChangeText}
           onBlur={onBlur}
           placeholder={placeholder}

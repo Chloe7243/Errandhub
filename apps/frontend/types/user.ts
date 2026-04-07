@@ -1,8 +1,10 @@
+import { Role } from "@errandhub/shared";
+
 export type User = {
-  //   id: string;
+  userId: string;
   firstName: string;
   lastName: string;
-  //   email: string;
-  //   phone: string;
-  //   role?: string;
+  email: string;
+  phone: string;
+  role?: Role;
 };

@@ -8,7 +8,7 @@ type Props = {
   size?: number;
 };
 
-const Avatar = ({ uri, firstName, lastName, size = 40 }: Props) => {
+const Avatar = ({ uri, firstName = "", lastName = "", size = 40 }: Props) => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
 

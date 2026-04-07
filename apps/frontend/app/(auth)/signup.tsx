@@ -1,8 +1,13 @@
 import BackButton from "@/components/ui/back-button";
 import Input from "@/components/ui/input";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { SignUpForm, signUpSchema } from "@/types/signup";
+import { useCreateAccountMutation } from "@/store/api";
+import { useAppDispatch } from "@/store/hooks";
+import { loginUser } from "@/store/slices";
+import { displayErrorMessage } from "@/utils/errors";
+import { SignUpForm, signUpSchema } from "@errandhub/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "expo-router";
@@ -19,11 +24,15 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 
 const SignUp = () => {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
+
+  const [createAccount, { isLoading }] = useCreateAccountMutation();
 
   const {
     control,
@@ -33,11 +42,20 @@ const SignUp = () => {
     resolver: zodResolver(signUpSchema),
   });
 
-  const onSubmit = (data: SignUpForm) => {
-    console.log(data);
-    // call your API here
-    router.push("/role-selection");
-  };
+  async function onSubmit(data: SignUpForm) {
+    if (isLoading) return;
+    try {
+      const response = await createAccount(data).unwrap();
+      Toast.show({
+        type: "success",
+        text1: "Account created successfully",
+      });
+      dispatch(loginUser({ user: response.user, token: response.token }));
+    } catch (error) {
+      console.error("Error creating account:", error);
+      displayErrorMessage(error);
+    }
+  }
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -117,6 +135,7 @@ const SignUp = () => {
                   <Input
                     label="University Email"
                     placeholder="you@university.ac.uk"
+                    keyboardType="email-address"
                     value={value}
                     onChangeText={onChange}
                     onBlur={onBlur}
@@ -140,6 +159,7 @@ const SignUp = () => {
                     label="Phone Number"
                     placeholder="Enter your phone number"
                     value={value}
+                    keyboardType="phone-pad"
                     onChangeText={onChange}
                     onBlur={onBlur}
                     error={errors.phone?.message}
@@ -161,6 +181,7 @@ const SignUp = () => {
                   <Input
                     label="Password"
                     placeholder="Create a password"
+                    keyboardType="visible-password"
                     value={value}
                     onChangeText={onChange}
                     onBlur={onBlur}
@@ -181,9 +202,13 @@ const SignUp = () => {
             <View style={styles.actions}>
               <TouchableOpacity
                 style={[styles.button, { backgroundColor: colors.primary }]}
-                onPress={handleSubmit(onSubmit)}
+                onPress={isLoading ? undefined : handleSubmit(onSubmit)}
               >
-                <Text style={styles.buttonText}>Create Account</Text>
+                {isLoading ? (
+                  <LoadingSpinner color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.buttonText}>Create Account</Text>
+                )}
               </TouchableOpacity>
 
               <Text style={[styles.footer, { color: colors.textSecondary }]}>

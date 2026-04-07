@@ -1,6 +1,9 @@
 import Avatar from "@/components/avatar";
 import ExpandableSection from "@/components/ui/expandable-section";
 import { Colors } from "@/constants/theme";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { logoutUser } from "@/store/slices";
+import { User } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { Bell, ChevronRight, LogOut, MapPin, Save } from "lucide-react-native";
 import React, { useState } from "react";
@@ -21,9 +24,11 @@ type RadiusOption = 0.5 | 1 | 2 | 5;
 const RADIUS_OPTIONS: RadiusOption[] = [0.5, 1, 2, 5];
 
 const HelperSettings = () => {
+  const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
 
+  const user = useAppSelector((state) => state.auth.user) as User;
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [isAvailable, setIsAvailable] = useState<boolean>(true);
   const [selectedRadius, setSelectedRadius] = useState<RadiusOption>(0.5);
@@ -39,7 +44,7 @@ const HelperSettings = () => {
       {
         text: "Log Out",
         style: "destructive",
-        onPress: () => console.log("Logging out"),
+        onPress: () => dispatch(logoutUser()),
       },
     ]);
   };
@@ -75,10 +80,14 @@ const HelperSettings = () => {
               },
             ]}
           >
-            <Avatar firstName="Alex" lastName="Helper" size={56} />
+            <Avatar
+              firstName={user?.firstName}
+              lastName={user?.lastName}
+              size={56}
+            />
             <View style={{ flex: 1 }}>
               <Text style={[styles.profileName, { color: colors.text }]}>
-                Alex Helper
+                {user?.firstName} {user?.lastName}
               </Text>
               <View style={styles.profileMeta}>
                 <Text

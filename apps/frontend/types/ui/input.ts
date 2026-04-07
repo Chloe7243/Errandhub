@@ -1,4 +1,4 @@
-import { ViewStyle, TextStyle } from "react-native";
+import { ViewStyle, TextStyle, TextInputProps } from "react-native";
 
 export type InputProps = {
   label?: string;
@@ -13,4 +13,5 @@ export type InputProps = {
   wrapperStyle?: ViewStyle;
   inputStyle?: TextStyle;
   leftIcon?: React.ReactNode;
+  keyboardType?: TextInputProps["keyboardType"];
 };

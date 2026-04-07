@@ -1,6 +1,8 @@
 import Avatar from "@/components/avatar";
 import ErrandCard from "@/components/errand-card";
 import { Colors } from "@/constants/theme";
+import { useAppSelector } from "@/store/hooks";
+import { User } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
@@ -19,6 +21,9 @@ const Home = () => {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
+  const user = useAppSelector((state) => state.auth.user) as User;
+
+  console.log("User in Home screen:", user);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -33,13 +38,17 @@ const Home = () => {
       >
         <View style={[styles.userInfoContainer]}>
           <View style={[styles.userInfo]}>
-            <Avatar firstName="Alex" lastName="Smith" size={50} />
+            <Avatar
+              firstName={user?.firstName}
+              lastName={user?.lastName}
+              size={50}
+            />
             <View>
               <Text style={[styles.greeting, { color: colors.textSecondary }]}>
                 {"Good Morning,"}
               </Text>
               <Text style={[styles.name, { color: colors.text }]}>
-                {"Alex"}
+                {user?.firstName || ""}
               </Text>
             </View>
           </View>

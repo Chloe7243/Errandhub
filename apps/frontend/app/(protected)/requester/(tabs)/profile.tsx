@@ -3,9 +3,13 @@ import ExpandableSection from "@/components/ui/expandable-section";
 import Input from "@/components/ui/input";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { logoutUser } from "@/store/slices";
+import { User } from "@/types/user";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,12 +21,25 @@ import { SafeAreaView } from "react-native-safe-area-context";
 type Section = null | "editProfile" | "paymentMethods" | "notifications";
 
 const Profile = () => {
+  const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const [expanded, setExpanded] = useState<Section>(null);
+  const user = useAppSelector((state) => state.auth.user) as User;
 
   const toggle = (section: Section) => {
     setExpanded((prev) => (prev === section ? null : section));
+  };
+
+  const handleLogout = (): void => {
+    Alert.alert("Log Out", "Are you sure you want to log out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Log Out",
+        style: "destructive",
+        onPress: () => dispatch(logoutUser()),
+      },
+    ]);
   };
 
   return (
@@ -35,15 +52,19 @@ const Profile = () => {
       >
         {/* Avatar + Name */}
         <View style={styles.hero}>
-          <Avatar firstName="Alex" lastName="Johnson" size={80} />
+          <Avatar
+            firstName={user?.firstName}
+            lastName={user?.lastName}
+            size={80}
+          />
           <Text style={[styles.name, { color: colors.text }]}>
-            Alex Johnson
+            {user?.firstName} {user?.lastName}
           </Text>
           <Text style={[styles.university, { color: colors.primary }]}>
-            Stanford University
+            {/* {user?.university} */}
           </Text>
           <Text style={[styles.member, { color: colors.textTertiary }]}>
-            Member since 2023
+            {/* Member since {new Date(user.createdAt).toLocaleDateString()} */}
           </Text>
         </View>
 
@@ -158,6 +179,7 @@ const Profile = () => {
         {/* Log Out */}
         <TouchableOpacity
           style={[styles.logoutButton, { borderColor: colors.border }]}
+          onPress={handleLogout}
         >
           <Ionicons name="log-out-outline" size={20} color={colors.error} />
           <Text style={[styles.logoutText, { color: colors.error }]}>

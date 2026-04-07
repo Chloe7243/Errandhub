@@ -4,7 +4,7 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../generated/prisma"
 }
 
@@ -49,21 +49,25 @@ enum DisputeStatus {
 }
 
 model User {
-  id               String    @id @default(cuid())
-  email            String    @unique
-  firstName        String
-  lastName         String
-  phone            String
-  passwordHash     String
-  avatarUrl        String?
-  isVerified       Boolean   @default(false)
-  stripeAccountId  String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  requestedErrands Errand[]  @relation("RequesterErrands")
-  helpingErrands   Errand[]  @relation("HelperErrands")
-  messages         Message[] @relation("UserMessages")
-  raisedDisputes   Dispute[] @relation("RaisedDisputes")
+  id                String    @id @default(cuid())
+  email             String    @unique
+  firstName         String
+  lastName          String
+  phone             String
+  passwordHash      String
+  avatarUrl         String?
+  isVerified        Boolean   @default(false)
+  stripeAccountId   String?
+  university        String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  resetToken        String?
+  verificationToken String?
+  resetTokenExpiry  DateTime?
+  requestedErrands  Errand[]  @relation("RequesterErrands")
+  helpingErrands    Errand[]  @relation("HelperErrands")
+  messages          Message[] @relation("UserMessages")
+  raisedDisputes    Dispute[] @relation("RaisedDisputes")
 }
 
 model Errand {

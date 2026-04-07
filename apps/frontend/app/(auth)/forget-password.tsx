@@ -3,10 +3,10 @@ import Input from "@/components/ui/input";
 import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useLoginUserMutation } from "@/store/api";
+import { useForgetPasswordMutation } from "@/store/api";
 import { useAppDispatch } from "@/store/hooks";
 import { loginUser } from "@/store/slices";
-import { loginSchema, LoginForm } from "@errandhub/shared";
+import { ForgetPasswordForm, forgetPasswordSchema } from "@errandhub/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "expo-router";
@@ -25,36 +25,32 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Toast } from "react-native-toast-message/lib/src/Toast";
 
-const Login = () => {
+const ForgetPassword = () => {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
 
-  const [login, { isLoading }] = useLoginUserMutation();
+  const [forgetPassword, { isLoading }] = useForgetPasswordMutation();
 
   const {
     control,
     handleSubmit,
     formState: { errors },
-  } = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
+  } = useForm<ForgetPasswordForm>({
+    resolver: zodResolver(forgetPasswordSchema),
   });
 
-  const onSubmit = async (data: LoginForm) => {
+  const onSubmit = async (data: ForgetPasswordForm) => {
     if (isLoading) return;
-    try {
-      const response = await login(data).unwrap();
-      console.log("Login successful:", response);
-      dispatch(loginUser({ user: response.user, token: response.token }));
-    } catch (error) {
-      console.error("Login failed:", error);
-      Toast.show({
-        type: "error",
-        text1: "Login failed",
-        text2: "Your email or password is incorrect. Please try again.",
-      });
-    }
+    const response = await forgetPassword(data).unwrap();
+    dispatch(loginUser({ user: response.user, token: response.token }));
+    router.push("/(auth)/login");
+    Toast.show({
+      type: "success",
+      text1: "Password reset email sent",
+      text2: "Please check your inbox for the reset link.",
+    });
   };
 
   return (
@@ -73,11 +69,13 @@ const Login = () => {
             <BackButton />
             <View style={styles.header}>
               <Text style={[styles.title, { color: colors.text }]}>
-                Welcome Back
+                Reset Password
               </Text>
 
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                Log in to continue to ErrandHub
+                {
+                  "Enter your email address and we'll send you a link to reset your password."
+                }
               </Text>
             </View>
 
@@ -104,37 +102,6 @@ const Login = () => {
                   />
                 )}
               />
-
-              <Controller
-                control={control}
-                name="password"
-                render={({ field: { value, onChange, onBlur } }) => (
-                  <Input
-                    label="Password"
-                    placeholder="Enter your password"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    error={errors.password?.message}
-                    secureTextEntry
-                    leftIcon={
-                      <Ionicons
-                        name="lock-closed-outline"
-                        size={18}
-                        color={colors.textTertiary}
-                      />
-                    }
-                  />
-                )}
-              />
-
-              <TouchableOpacity
-                onPress={() => router.push("/(auth)/forget-password")}
-              >
-                <Text style={[styles.forgot, { color: colors.primary }]}>
-                  Forgot password?
-                </Text>
-              </TouchableOpacity>
             </View>
             <View style={styles.actions}>
               <TouchableOpacity
@@ -144,19 +111,9 @@ const Login = () => {
                 {isLoading ? (
                   <LoadingSpinner color="#fff" size="small" />
                 ) : (
-                  <Text style={styles.buttonText}>Log In</Text>
+                  <Text style={styles.buttonText}>Reset Password</Text>
                 )}
               </TouchableOpacity>
-
-              <Text style={[styles.footer, { color: colors.textSecondary }]}>
-                {"Don't have an account? "}
-                <Text
-                  style={{ color: colors.primary, fontWeight: "600" }}
-                  onPress={() => router.push("/(auth)/signup")}
-                >
-                  Sign Up
-                </Text>
-              </Text>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -165,7 +122,7 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default ForgetPassword;
 
 const styles = StyleSheet.create({
   container: {
