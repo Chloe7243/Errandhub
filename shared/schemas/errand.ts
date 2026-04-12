@@ -10,6 +10,7 @@ export const errandStatusEnum = z.enum([
   "CANCELLED",
   "EXPIRED",
   "DISPUTED",
+  "EXPIRED",
 ]);
 export const errandTypeEnum = z.enum(["PICKUP_DELIVERY", "SHOPPING"]);
 

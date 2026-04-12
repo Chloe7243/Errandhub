@@ -53,7 +53,7 @@ export const getRequestedErrands = async (
       },
       orderBy: { createdAt: "desc" },
       include: {
-        bids: {
+        offers: {
           include: {
             helper: {
               select: {

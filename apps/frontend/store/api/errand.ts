@@ -38,29 +38,29 @@ const errandApi = api.injectEndpoints({
     submitOffer: build.mutation({
       query: ({
         errandId,
-        bidAmount,
+        offerAmount,
       }: {
         errandId: string;
-        bidAmount: number;
+        offerAmount: number;
       }) => ({
-        url: `/errand/${errandId}/bids`,
+        url: `/errand/${errandId}/offers`,
         method: "POST",
-        body: { amount: bidAmount },
+        body: { amount: offerAmount },
       }),
       invalidatesTags: [TAGS.REQUESTED_ERRANDS],
     }),
 
     acceptOffer: build.mutation({
-      query: ({ errandId, bidId }: { errandId: string; bidId: string }) => ({
-        url: `/errand/${errandId}/bids/${bidId}/accept`,
+      query: ({ errandId, offerId }: { errandId: string; offerId: string }) => ({
+        url: `/errand/${errandId}/offers/${offerId}/accept`,
         method: "PATCH",
       }),
       invalidatesTags: [TAGS.REQUESTED_ERRANDS],
     }),
 
     declineOffer: build.mutation({
-      query: ({ errandId, bidId }: { errandId: string; bidId: string }) => ({
-        url: `/errand/${errandId}/bids/${bidId}/decline`,
+      query: ({ errandId, offerId }: { errandId: string; offerId: string }) => ({
+        url: `/errand/${errandId}/offers/${offerId}/decline`,
         method: "PATCH",
       }),
       invalidatesTags: [TAGS.REQUESTED_ERRANDS],

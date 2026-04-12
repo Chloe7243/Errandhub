@@ -209,11 +209,11 @@ const BrowseErrands = () => {
                 </Text>
               </View>
 
-              {/* Already bid indicator */}
-              {item.bids?.length > 0 && (
+              {/* Already offered indicator */}
+              {item.offers?.length > 0 && (
                 <View
                   style={[
-                    styles.bidBadge,
+                    styles.offerBadge,
                     { backgroundColor: colors.success + "20" },
                   ]}
                 >
@@ -223,9 +223,9 @@ const BrowseErrands = () => {
                     color={colors.success}
                   />
                   <Text
-                    style={[styles.bidBadgeText, { color: colors.success }]}
+                    style={[styles.offerBadgeText, { color: colors.success }]}
                   >
-                    Bid submitted — £{item.bids[0].amount.toFixed(2)}
+                    Offer submitted — £{item.offers[0].amount.toFixed(2)}
                   </Text>
                 </View>
               )}
@@ -300,12 +300,12 @@ const styles = StyleSheet.create({
   requesterRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   requesterName: { fontSize: 13 },
   timeText: { fontSize: 12 },
-  bidBadge: {
+  offerBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     padding: 8,
     borderRadius: 8,
   },
-  bidBadgeText: { fontSize: 12, fontWeight: "500" },
+  offerBadgeText: { fontSize: 12, fontWeight: "500" },
 });

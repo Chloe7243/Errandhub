@@ -15,6 +15,7 @@ import { displayErrorMessage } from "@/utils/errors";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -34,8 +35,8 @@ const ErrandDetails = () => {
   const colorScheme = useColorScheme();
   const errand = currentData?.errand;
   const colors = Colors[colorScheme ?? "dark"];
-  const [acceptBid, { isLoading: isAccepting }] = useAcceptOfferMutation();
-  const [declineBid, { isLoading: isDeclining }] = useDeclineOfferMutation();
+  const [acceptOffer, { isLoading: isAccepting }] = useAcceptOfferMutation();
+  const [declineOffer, { isLoading: isDeclining }] = useDeclineOfferMutation();
 
   const isActive = errand?.status === "IN_PROGRESS";
   const isCompleted = errand?.status === "COMPLETED";
@@ -43,23 +44,23 @@ const ErrandDetails = () => {
   const isTerminal =
     errand?.status === "CANCELLED" || errand?.status === "DISPUTED";
   const displayAmount = errand?.agreedPrice ?? errand?.suggestedPrice;
-  const pendingBids = errand?.bids ?? [];
+  const pendingOffers = errand?.offers ?? [];
 
   console.log({ errand });
 
-  const handleAcceptBid = async (bidId: string) => {
+  const handleAcceptOffer = async (offerId: string) => {
     try {
-      await acceptBid({ errandId: errand!.id, bidId }).unwrap();
+      await acceptOffer({ errandId: errand!.id, offerId }).unwrap();
       Toast.show({ type: "success", text1: "Helper accepted!" });
     } catch (err) {
       displayErrorMessage(err);
     }
   };
 
-  const handleDeclineBid = async (bidId: string) => {
+  const handleDeclineOffer = async (offerId: string) => {
     try {
-      await declineBid({ errandId: errand!.id, bidId }).unwrap();
-      Toast.show({ type: "success", text1: "Bid declined" });
+      await declineOffer({ errandId: errand!.id, offerId }).unwrap();
+      Toast.show({ type: "success", text1: "Offer declined" });
     } catch (err) {
       displayErrorMessage(err);
     }
@@ -204,7 +205,7 @@ const ErrandDetails = () => {
                       { color: colors.textTertiary },
                     ]}
                   >
-                    Awaiting bids
+                    Awaiting offers
                   </Text>
                 )}
               </View>
@@ -311,84 +312,93 @@ const ErrandDetails = () => {
                 </View>
               ) : (
                 <View style={styles.noHelperRow}>
-                  <Ionicons
-                    name="person-outline"
-                    size={20}
-                    color={colors.textTertiary}
-                  />
-                  <Text
-                    style={[
-                      styles.noHelperText,
-                      { color: colors.textTertiary },
-                    ]}
-                  >
-                    {pendingBids.length > 0
-                      ? `${pendingBids.length} helper${pendingBids.length > 1 ? "s" : ""} interested — review bids below`
-                      : "Waiting for a helper to bid"}
-                  </Text>
+                  {pendingOffers.length === 0 ? (
+                    <>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text style={[styles.noHelperText, { color: colors.text, fontWeight: "600" }]}>
+                          Searching for a helper...
+                        </Text>
+                        <Text style={[styles.noHelperSubtext, { color: colors.textTertiary }]}>
+                          We'll notify you as soon as one is found
+                        </Text>
+                      </View>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="person-outline"
+                        size={20}
+                        color={colors.textTertiary}
+                      />
+                      <Text style={[styles.noHelperText, { color: colors.textTertiary }]}>
+                        {`${pendingOffers.length} helper${pendingOffers.length > 1 ? "s" : ""} interested — review offers below`}
+                      </Text>
+                    </>
+                  )}
                 </View>
               )}
             </View>
-            {/* Bids — only show pending bids when status is POSTED */}
-            {errand.status === "POSTED" && pendingBids.length > 0 && (
+            {/* Offers — only show pending offers when status is POSTED */}
+            {errand.status === "POSTED" && pendingOffers.length > 0 && (
               <View
                 style={[{ display: "flex", flexDirection: "column", gap: 12 }]}
               >
                 <View style={styles.cardRow}>
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    Bids
+                    Offers
                   </Text>
                   <Text
-                    style={[styles.bidCount, { color: colors.textTertiary }]}
+                    style={[styles.offerCount, { color: colors.textTertiary }]}
                   >
-                    {pendingBids.length} pending
+                    {pendingOffers.length} pending
                   </Text>
                 </View>
 
-                {pendingBids.map((bid: any) => (
+                {pendingOffers.map((offer: any) => (
                   <View
-                    key={bid.id}
+                    key={offer.id}
                     style={[
-                      styles.bidCard,
+                      styles.offerCard,
                       {
                         backgroundColor: colors.backgroundSecondary,
                         borderColor: colors.border,
                       },
                     ]}
                   >
-                    <View style={styles.bidHeader}>
+                    <View style={styles.offerHeader}>
                       <Avatar
-                        firstName={bid.helper?.firstName}
-                        lastName={bid.helper?.lastName}
-                        uri={bid.helper?.avatarUrl ?? undefined}
+                        firstName={offer.helper?.firstName}
+                        lastName={offer.helper?.lastName}
+                        uri={offer.helper?.avatarUrl ?? undefined}
                         size={40}
                       />
                       <View style={{ flex: 1 }}>
                         <Text
                           style={[styles.helperName, { color: colors.text }]}
                         >
-                          {bid.helper?.firstName} {bid.helper?.lastName}
+                          {offer.helper?.firstName} {offer.helper?.lastName}
                         </Text>
                         <Text
                           style={[
-                            styles.bidTime,
+                            styles.offerTime,
                             { color: colors.textTertiary },
                           ]}
                         >
-                          {new Date(bid.createdAt).toLocaleTimeString([], {
+                          {new Date(offer.createdAt).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
                         </Text>
                       </View>
                       <Text
-                        style={[styles.bidAmount, { color: colors.primary }]}
+                        style={[styles.offerAmount, { color: colors.primary }]}
                       >
-                        £{bid.amount.toFixed(2)}
+                        £{offer.amount.toFixed(2)}
                       </Text>
                     </View>
 
-                    <View style={styles.bidActions}>
+                    <View style={styles.offerActions}>
                       <TouchableOpacity
                         style={[
                           styles.declineBtn,
@@ -397,7 +407,7 @@ const ErrandDetails = () => {
                             borderColor: colors.error,
                           },
                         ]}
-                        onPress={() => handleDeclineBid(bid.id)}
+                        onPress={() => handleDeclineOffer(offer.id)}
                         disabled={isAccepting || isDeclining}
                       >
                         <Text style={[styles.declineBtnText]}>Decline</Text>
@@ -410,7 +420,7 @@ const ErrandDetails = () => {
                             opacity: isAccepting ? 0.7 : 1,
                           },
                         ]}
-                        onPress={() => handleAcceptBid(bid.id)}
+                        onPress={() => handleAcceptOffer(offer.id)}
                         disabled={isAccepting || isDeclining}
                       >
                         <Text style={styles.acceptBtnText}>Accept</Text>
@@ -421,8 +431,8 @@ const ErrandDetails = () => {
               </View>
             )}
 
-            {/* No bids yet */}
-            {errand.status === "POSTED" && pendingBids.length === 0 && (
+            {/* No offers yet */}
+            {errand.status === "POSTED" && pendingOffers.length === 0 && (
               <View
                 style={{
                   flex: 1,
@@ -432,7 +442,7 @@ const ErrandDetails = () => {
                 }}
               >
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  Bids
+                  Offers
                 </Text>
                 <EmptyState
                   containerStyle={[
@@ -445,7 +455,7 @@ const ErrandDetails = () => {
                   ]}
                   variant="card"
                   icon="hourglass-outline"
-                  message="No bids yet — helpers will be notified"
+                  message="No offers yet — helpers will be notified"
                 />
               </View>
             )}
@@ -609,15 +619,16 @@ const styles = StyleSheet.create({
   helperRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   helperInfo: { flex: 1, gap: 4 },
   helperName: { fontSize: 16, fontWeight: "600" },
-  noHelperRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  noHelperRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   noHelperText: { fontSize: 14, fontStyle: "italic" },
+  noHelperSubtext: { fontSize: 12 },
   contact: { padding: 10, borderRadius: 10 },
-  bidCount: { fontSize: 13 },
-  bidCard: { padding: 12, borderRadius: 10, borderWidth: 1, gap: 12 },
-  bidHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
-  bidAmount: { fontSize: 18, fontWeight: "700" },
-  bidTime: { fontSize: 12, marginTop: 2 },
-  bidActions: { flexDirection: "row", gap: 10 },
+  offerCount: { fontSize: 13 },
+  offerCard: { padding: 12, borderRadius: 10, borderWidth: 1, gap: 12 },
+  offerHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  offerAmount: { fontSize: 18, fontWeight: "700" },
+  offerTime: { fontSize: 12, marginTop: 2 },
+  offerActions: { flexDirection: "row", gap: 10 },
   declineBtn: {
     flex: 1,
     paddingVertical: 10,

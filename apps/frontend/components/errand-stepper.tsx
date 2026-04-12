@@ -23,6 +23,7 @@ const LABELS: Record<ErrandStatus, string> = {
   CANCELLED: "Cancelled",
   EXPIRED: "Expired",
   DISPUTED: "Disputed",
+  EXPIRED: "Expired",
 };
 
 type Props = {

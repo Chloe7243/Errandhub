@@ -85,7 +85,7 @@ const HelperErrandDetails = () => {
       return;
     }
     try {
-      await submitOffer({ errandId: id!, bidAmount: amount }).unwrap();
+      await submitOffer({ errandId: id!, offerAmount: amount }).unwrap();
       Toast.show({ type: "success", text1: "Offer sent" });
       setOfferAmount("");
       setShowNegotiate(false);

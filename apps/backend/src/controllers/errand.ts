@@ -72,7 +72,7 @@ export const getPostedErrands = async (
             avatarUrl: true,
           },
         },
-        bids: {
+        offers: {
           where: { helperId: req.userId },
         },
       },
@@ -95,7 +95,7 @@ export const getErrandById = async (
     const errand = await prisma.errand.findUnique({
       where: { id },
       include: {
-        bids: {
+        offers: {
           include: {
             helper: {
               select: {
@@ -135,7 +135,7 @@ export const getErrandById = async (
   }
 };
 
-export const submitBid = async (
+export const submitOffer = async (
   req: AuthRequest<{ id: string }>,
   res: Response,
   next: NextFunction,
@@ -144,20 +144,20 @@ export const submitBid = async (
     const { id } = req.params;
     const { amount } = req.body;
 
-    if (!amount || amount <= 0) throw new AppError("Invalid bid amount", 400);
+    if (!amount || amount <= 0) throw new AppError("Invalid offer amount", 400);
 
     const errand = await prisma.errand.findUnique({ where: { id } });
     if (!errand) throw new AppError("Errand not found", 404);
     if (errand.status !== "POSTED")
       throw new AppError("Errand is no longer available", 400);
 
-    // check if helper already bid
-    const existingBid = await prisma.errandBid.findFirst({
+    // check if helper already submitted an offer
+    const existingOffer = await prisma.errandOffer.findFirst({
       where: { errandId: id, helperId: req.userId },
     });
-    if (existingBid) throw new AppError("You have already placed a bid", 400);
+    if (existingOffer) throw new AppError("You have already submitted an offer", 400);
 
-    const bid = await prisma.errandBid.create({
+    const offer = await prisma.errandOffer.create({
       data: {
         errandId: id,
         helperId: req.userId!,
@@ -165,70 +165,70 @@ export const submitBid = async (
       },
     });
 
-    res.status(201).json({ bid, message: "Bid submitted successfully" });
+    res.status(201).json({ offer, message: "Offer submitted successfully" });
   } catch (error) {
     next(error);
   }
 };
 
-export const acceptBid = async (
-  req: AuthRequest<{ id: string; bidId: string }>,
+export const acceptOffer = async (
+  req: AuthRequest<{ id: string; offerId: string }>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const { id, bidId } = req.params;
+    const { id, offerId } = req.params;
 
     const errand = await prisma.errand.findUnique({ where: { id } });
     if (!errand) throw new AppError("Errand not found", 404);
     if (errand.requesterId !== req.userId)
       throw new AppError("Unauthorised", 403);
 
-    const bid = await prisma.errandBid.findUnique({ where: { id: bidId } });
-    if (!bid) throw new AppError("Bid not found", 404);
+    const offer = await prisma.errandOffer.findUnique({ where: { id: offerId } });
+    if (!offer) throw new AppError("Offer not found", 404);
 
     await prisma.$transaction([
-      prisma.errandBid.update({
-        where: { id: bidId },
+      prisma.errandOffer.update({
+        where: { id: offerId },
         data: { status: "ACCEPTED" },
       }),
-      prisma.errandBid.updateMany({
-        where: { errandId: id, id: { not: bidId } },
+      prisma.errandOffer.updateMany({
+        where: { errandId: id, id: { not: offerId } },
         data: { status: "DECLINED" },
       }),
       prisma.errand.update({
         where: { id },
         data: {
           status: "ACCEPTED",
-          helperId: bid.helperId,
-          agreedPrice: bid.amount,
+          helperId: offer.helperId,
+          agreedPrice: offer.amount,
         },
       }),
     ]);
 
-    res.status(200).json({ message: "Bid accepted successfully" });
+    res.status(200).json({ message: "Offer accepted successfully" });
   } catch (error) {
     next(error);
   }
 };
 
-export const declineBid = async (
-  req: AuthRequest<{ bidId: string }>,
+export const declineOffer = async (
+  req: AuthRequest<{ offerId: string }>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const { bidId } = req.params;
+    const { offerId } = req.params;
 
-    const bid = await prisma.errandBid.findUnique({ where: { id: bidId } });
-    if (!bid) throw new AppError("Bid not found", 404);
+    const offer = await prisma.errandOffer.findUnique({ where: { id: offerId } });
+    if (!offer) throw new AppError("Offer not found", 404);
 
-    await prisma.errandBid.update({
-      where: { id: bidId },
+    await prisma.errandOffer.update({
+      where: { id: offerId },
       data: { status: "DECLINED" },
     });
 
-    res.status(200).json({ message: "Bid declined successfully" });
+    res.status(200).json({ message: "Offer declined successfully" });
   } catch (error) {
     next(error);
   }

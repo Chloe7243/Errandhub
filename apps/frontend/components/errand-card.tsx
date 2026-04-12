@@ -29,6 +29,7 @@ const statusColors: Record<ErrandStatus, string> = {
   CANCELLED: "#EF4444",
   EXPIRED: "#6B7280",
   DISPUTED: "#EF4444",
+  EXPIRED: "#6B7280",
 };
 
 const ErrandCard = ({
@@ -90,7 +91,7 @@ const ErrandCard = ({
           </Text>
         ) : (
           <Text style={[styles.amountPending, { color: colors.textTertiary }]}>
-            Awaiting bids
+            Awaiting offers
           </Text>
         )}
       </View>

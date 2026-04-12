@@ -22,6 +22,7 @@ enum ErrandStatus {
   CANCELLED
   EXPIRED
   DISPUTED
+  EXPIRED
 }
 
 enum PaymentStatus {
@@ -50,7 +51,7 @@ enum DisputeStatus {
   CLOSED
 }
 
-enum BidStatus {
+enum OfferStatus {
   PENDING
   ACCEPTED
   DECLINED
@@ -77,7 +78,7 @@ model User {
   helpingErrands    Errand[]        @relation("HelperErrands")
   messages          Message[]       @relation("UserMessages")
   raisedDisputes    Dispute[]       @relation("RaisedDisputes")
-  errandBids        ErrandBid[]     @relation("HelperBids")
+  errandOffers      ErrandOffer[]   @relation("HelperOffers")
   userSettings      UserSettings[]
 }
 
@@ -136,19 +137,19 @@ model Errand {
   helper    User?               @relation("HelperErrands", fields: [helperId], references: [id])
   requester User                @relation("RequesterErrands", fields: [requesterId], references: [id])
   dispute   Dispute?
-  bids      ErrandBid[]
+  offers    ErrandOffer[]
 }
 
-model ErrandBid {
-  id        String    @id @default(cuid())
+model ErrandOffer {
+  id        String      @id @default(cuid())
   errandId  String
   helperId  String
   amount    Float
-  status    BidStatus @default(PENDING)
-  createdAt DateTime  @default(now())
+  status    OfferStatus @default(PENDING)
+  createdAt DateTime    @default(now())
 
   errand Errand @relation(fields: [errandId], references: [id])
-  helper User   @relation("HelperBids", fields: [helperId], references: [id])
+  helper User   @relation("HelperOffers", fields: [helperId], references: [id])
 }
 
 model Message {

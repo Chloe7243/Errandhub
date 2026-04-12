@@ -23,13 +23,13 @@ type Filter = "ALL" | ErrandStatus;
 
 const filters: Filter[] = [
   "ALL",
-  "POSTED",
   "ACCEPTED",
   "IN_PROGRESS",
   "REVIEWING",
   "COMPLETED",
   "CANCELLED",
   "DISPUTED",
+  "EXPIRED",
 ];
 
 const ErrandHistory = () => {
@@ -44,7 +44,9 @@ const ErrandHistory = () => {
     isLoading,
     isError,
   } = useGetRequestedErrandsQuery(
-    activeFilter === "ALL" ? {} : { status: [activeFilter] },
+    activeFilter === "ALL"
+      ? { status: ["ACCEPTED", "IN_PROGRESS", "REVIEWING", "COMPLETED", "CANCELLED", "DISPUTED", "EXPIRED"] }
+      : { status: [activeFilter] },
     { refetchOnMountOrArgChange: true },
   );
 

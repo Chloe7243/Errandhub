@@ -227,7 +227,7 @@ const CreateErrand = () => {
             />
             <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
               A suggested price will be calculated based on distance. Helpers
-              can adjust their bid before you confirm.
+              can make a counter-offer before you confirm.
             </Text>
           </View>
         </View>
