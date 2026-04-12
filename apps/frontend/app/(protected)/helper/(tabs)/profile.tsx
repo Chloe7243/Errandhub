@@ -80,8 +80,6 @@ const HelperSettings = () => {
     }
   }, [settingsData]);
 
-  console.log({ settingsData, error });
-
   const hasChanges =
     JSON.stringify(savedSettings) !== JSON.stringify(currentSettings);
 

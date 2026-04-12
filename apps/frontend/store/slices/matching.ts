@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
-type HelperProfile = {
+export type HelperProfile = {
   id: string;
   firstName: string;
   lastName: string;
@@ -8,7 +8,7 @@ type HelperProfile = {
   completedCount?: number;
 };
 
-type ErrandRequestPayload = {
+export type ErrandRequestPayload = {
   errandId: string;
   title: string;
   description: string;
@@ -33,7 +33,7 @@ type ReviewWindowPayload = {
   expiresAt: string;
 };
 
-type CounterOfferPayload = {
+export type CounterOfferPayload = {
   errandId: string;
   helper: HelperProfile;
   amount: number;

@@ -1,6 +1,7 @@
 import Avatar from "@/components/avatar";
 import LoadingSpinner from "@/components/ui/loading-spinner";
 import AvailabilityToggle from "@/components/availability-toggle";
+import DispatchRequestModal from "@/components/dispatch-request-modal";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -25,24 +26,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { User } from "@/types";
 
-type ErrandRequestPayload = {
-  errandId: string;
-  title: string;
-  description: string;
-  pickupLocation: string;
-  dropoffLocation: string;
-  pickupReference?: string | null;
-  suggestedPrice: number;
-  type: string;
-  requester: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    avatarUrl?: string | null;
-  };
-  expiresAt: string;
-};
-
 const HelperHome = () => {
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -51,7 +34,7 @@ const HelperHome = () => {
   const user = useAppSelector((state: RootState) => state.auth.user) as User;
   const helperRequest = useAppSelector(
     (state: RootState) => state.matching.helperRequest,
-  ) as ErrandRequestPayload | null;
+  );
 
   const { currentData: activeData, isLoading } = useGetHelpedErrandsQuery(
     { status: ["ACCEPTED", "IN_PROGRESS", "REVIEWING"] },
@@ -60,8 +43,6 @@ const HelperHome = () => {
   const { currentData: settingsData } = useGetSettingsQuery(null);
 
   const [isAvailable, setIsAvailable] = useState(false);
-  const [counterAmount, setCounterAmount] = useState(0);
-  const [isNegotiationOpen, setIsNegotiationOpen] = useState(false);
 
   useEffect(() => {
     if (settingsData?.settings) {
@@ -69,50 +50,28 @@ const HelperHome = () => {
     }
   }, [settingsData]);
 
-  useEffect(() => {
-    if (helperRequest) {
-      setCounterAmount(helperRequest?.suggestedPrice);
-    }
-  }, [helperRequest]);
-
   const activeTask = activeData?.errands?.[0] ?? null;
   const hasActiveTask = !!activeTask;
-  const countdownSeconds = helperRequest
-    ? Math.max(
-        0,
-        Math.ceil(
-          (new Date(helperRequest?.expiresAt).getTime() - Date.now()) / 1000,
-        ),
-      )
-    : 0;
 
   const handleAccept = () => {
     const socket = getSocket();
     if (!helperRequest || !socket) return;
-    socket.emit("accept_errand", { errandId: helperRequest?.errandId });
+    socket.emit("accept_errand", { errandId: helperRequest.errandId });
     dispatch(clearHelperRequest());
   };
 
   const handleDecline = () => {
     const socket = getSocket();
     if (!helperRequest || !socket) return;
-    socket.emit("decline_errand", { errandId: helperRequest?.errandId });
+    socket.emit("decline_errand", { errandId: helperRequest.errandId });
     dispatch(clearHelperRequest());
   };
 
-  const handleNegotiate = () => {
-    setIsNegotiationOpen(true);
-  };
-
-  const handleSubmitCounterOffer = () => {
+  const handleCounterOffer = (amount: number) => {
     const socket = getSocket();
     if (!helperRequest || !socket) return;
-    socket.emit("counter_offer", {
-      errandId: helperRequest?.errandId,
-      amount: counterAmount,
-    });
+    socket.emit("counter_offer", { errandId: helperRequest.errandId, amount });
     dispatch(clearHelperRequest());
-    setIsNegotiationOpen(false);
   };
 
   return (
@@ -358,165 +317,12 @@ const HelperHome = () => {
         </View>
       </ScrollView>
 
-      {helperRequest ? (
-        <View
-          style={[styles.overlay, { backgroundColor: colors.surface + "CC" }]}
-        >
-          <View
-            style={[
-              styles.modal,
-              {
-                backgroundColor: colors.backgroundSecondary,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              New Dispatch Request
-            </Text>
-            <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>
-              From {helperRequest?.requester?.firstName || ""}{" "}
-              {helperRequest?.requester?.lastName || ""}
-            </Text>
-            <Text style={[styles.modalText, { color: colors.text }]}>
-              {helperRequest.title}
-            </Text>
-            <Text style={[styles.modalInfo, { color: colors.textSecondary }]}>
-              Pickup: {helperRequest.pickupLocation}
-            </Text>
-            <Text style={[styles.modalInfo, { color: colors.textSecondary }]}>
-              Drop-off: {helperRequest.dropoffLocation}
-            </Text>
-            <Text style={[styles.modalInfo, { color: colors.textSecondary }]}>
-              Suggested: £{helperRequest?.suggestedPrice?.toFixed(2)}
-            </Text>
-            <Text style={[styles.countdown, { color: colors.primary }]}>
-              Respond in {countdownSeconds}s
-            </Text>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  { backgroundColor: colors.primary },
-                ]}
-                onPress={handleAccept}
-              >
-                <Text style={[styles.modalButtonText, { color: "#fff" }]}>
-                  Accept
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  { backgroundColor: colors.surface },
-                ]}
-                onPress={handleNegotiate}
-              >
-                <Text style={[styles.modalButtonText, { color: colors.text }]}>
-                  Negotiate
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: "#EF4444" }]}
-                onPress={handleDecline}
-              >
-                <Text style={[styles.modalButtonText, { color: "#fff" }]}>
-                  Decline
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      ) : null}
-
-      {isNegotiationOpen ? (
-        <View
-          style={[styles.overlay, { backgroundColor: colors.surface + "CC" }]}
-        >
-          <View
-            style={[
-              styles.modal,
-              {
-                backgroundColor: colors.backgroundSecondary,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Counter Offer
-            </Text>
-            <Text style={[styles.modalInfo, { color: colors.textSecondary }]}>
-              Adjust the price in £0.50 increments.
-            </Text>
-            <View style={styles.counterRow}>
-              <TouchableOpacity
-                style={[
-                  styles.counterButton,
-                  { backgroundColor: colors.background },
-                ]}
-                onPress={() =>
-                  setCounterAmount((prev) =>
-                    Math.max(helperRequest?.suggestedPrice ?? 0, prev - 0.5),
-                  )
-                }
-              >
-                <Text
-                  style={[styles.counterButtonText, { color: colors.text }]}
-                >
-                  -
-                </Text>
-              </TouchableOpacity>
-              <Text style={[styles.counterAmount, { color: colors.text }]}>
-                £{counterAmount.toFixed(2)}
-              </Text>
-              <TouchableOpacity
-                style={[
-                  styles.counterButton,
-                  { backgroundColor: colors.background },
-                ]}
-                onPress={() =>
-                  setCounterAmount((prev) =>
-                    Math.min(
-                      (helperRequest?.suggestedPrice ?? 0) * 2,
-                      prev + 0.5,
-                    ),
-                  )
-                }
-              >
-                <Text
-                  style={[styles.counterButtonText, { color: colors.text }]}
-                >
-                  +
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  { backgroundColor: colors.primary },
-                ]}
-                onPress={handleSubmitCounterOffer}
-              >
-                <Text style={[styles.modalButtonText, { color: "#fff" }]}>
-                  Send Offer
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  { backgroundColor: colors.surface },
-                ]}
-                onPress={() => setIsNegotiationOpen(false)}
-              >
-                <Text style={[styles.modalButtonText, { color: colors.text }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      ) : null}
+      <DispatchRequestModal
+        helperRequest={helperRequest}
+        onAccept={handleAccept}
+        onDecline={handleDecline}
+        onCounterOffer={handleCounterOffer}
+      />
     </SafeAreaView>
   );
 };
@@ -589,53 +395,4 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   unavailableText: { fontSize: 13, textAlign: "center", lineHeight: 20 },
-  overlay: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  modal: {
-    width: "100%",
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 20,
-    gap: 16,
-  },
-  modalTitle: { fontSize: 18, fontWeight: "700" },
-  modalLabel: { fontSize: 13 },
-  modalText: { fontSize: 15, fontWeight: "600" },
-  modalInfo: { fontSize: 13 },
-  countdown: { fontSize: 14, fontWeight: "700" },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  modalButton: {
-    flex: 1,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  modalButtonText: { fontWeight: "700" },
-  counterRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  counterButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  counterButtonText: { fontSize: 20, fontWeight: "700" },
-  counterAmount: { fontSize: 18, fontWeight: "700" },
 });

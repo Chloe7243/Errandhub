@@ -22,7 +22,6 @@ enum ErrandStatus {
   CANCELLED
   EXPIRED
   DISPUTED
-  EXPIRED
 }
 
 enum PaymentStatus {
@@ -70,6 +69,7 @@ model User {
   university        String?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
+  role              String?
   resetToken        String?
   verificationToken String?
   resetTokenExpiry  DateTime?

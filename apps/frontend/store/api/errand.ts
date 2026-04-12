@@ -1,4 +1,4 @@
-import { CreateErrandInput } from "@errandhub/shared";
+import { CreateErrandInput, ErrandStatus } from "@errandhub/shared";
 import { api } from ".";
 import { TAGS } from "@/utils/constants";
 
@@ -26,6 +26,9 @@ const errandApi = api.injectEndpoints({
         url: `/errand/${errandId}`,
         method: "GET",
       }),
+      providesTags: (result, error, errandId) => [
+        { type: TAGS.ERRAND, id: errandId },
+      ],
     }),
 
     acceptErrand: build.mutation({
@@ -51,28 +54,56 @@ const errandApi = api.injectEndpoints({
     }),
 
     acceptOffer: build.mutation({
-      query: ({ errandId, offerId }: { errandId: string; offerId: string }) => ({
+      query: ({
+        errandId,
+        offerId,
+      }: {
+        errandId: string;
+        offerId: string;
+      }) => ({
         url: `/errand/${errandId}/offers/${offerId}/accept`,
         method: "PATCH",
       }),
-      invalidatesTags: [TAGS.REQUESTED_ERRANDS],
+      invalidatesTags: (result, error, { errandId }) => [
+        TAGS.REQUESTED_ERRANDS,
+        { type: TAGS.ERRAND, id: errandId },
+      ],
     }),
 
     declineOffer: build.mutation({
-      query: ({ errandId, offerId }: { errandId: string; offerId: string }) => ({
+      query: ({
+        errandId,
+        offerId,
+      }: {
+        errandId: string;
+        offerId: string;
+      }) => ({
         url: `/errand/${errandId}/offers/${offerId}/decline`,
         method: "PATCH",
       }),
-      invalidatesTags: [TAGS.REQUESTED_ERRANDS],
+      invalidatesTags: (result, error, { errandId }) => [
+        TAGS.REQUESTED_ERRANDS,
+        { type: TAGS.ERRAND, id: errandId },
+      ],
     }),
 
     updateErrandStatus: build.mutation({
-      query: ({ errandId, status }) => ({
+      query: ({
+        errandId,
+        status,
+      }: {
+        errandId: string;
+        status: ErrandStatus;
+      }) => ({
         url: `/errand/${errandId}/status`,
         method: "PATCH",
         body: { status },
       }),
-      invalidatesTags: [TAGS.REQUESTED_ERRANDS, TAGS.HELPED_ERRANDS],
+      invalidatesTags: (result, error, { errandId }) => [
+        TAGS.REQUESTED_ERRANDS,
+        TAGS.HELPED_ERRANDS,
+        { type: TAGS.ERRAND, id: errandId },
+      ],
     }),
   }),
 });

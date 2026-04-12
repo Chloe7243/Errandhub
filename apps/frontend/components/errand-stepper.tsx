@@ -6,7 +6,6 @@ import { StyleSheet, Text, View } from "react-native";
 
 const STEPS: ErrandStatus[] = [
   "POSTED",
-  "TENTATIVELY_ACCEPTED",
   "ACCEPTED",
   "IN_PROGRESS",
   "REVIEWING",
@@ -23,7 +22,6 @@ const LABELS: Record<ErrandStatus, string> = {
   CANCELLED: "Cancelled",
   EXPIRED: "Expired",
   DISPUTED: "Disputed",
-  EXPIRED: "Expired",
 };
 
 type Props = {

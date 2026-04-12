@@ -45,7 +45,6 @@ const ResetPassword = () => {
         token,
         password: data.password,
       }).unwrap();
-      console.log("Password reset successful:", response);
       Toast.show({ type: "success", text1: "Password reset successfully" });
       router.replace("/(auth)/login");
     } catch (err) {

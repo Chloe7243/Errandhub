@@ -97,7 +97,7 @@ const expireErrand = async (errandId: string) => {
   cleanupMatchingState(errandId);
 };
 
-const scheduleNextHelper = async (errandId: string) => {
+const scheduleHelper = async (errandId: string) => {
   const state = matchingState.get(errandId);
   if (!state) return;
 
@@ -125,6 +125,7 @@ const scheduleNextHelper = async (errandId: string) => {
   const connectedHelperIds = getConnectedHelpers().filter((helperId) =>
     availableHelperIds.includes(helperId),
   );
+  console.log({ availableHelperIds, connectedHelperIds });
 
   if (connectedHelperIds.length === 0) {
     await expireErrand(errandId);
@@ -167,29 +168,28 @@ const scheduleNextHelper = async (errandId: string) => {
       },
     },
   });
+
   if (!errandDetails || !errandDetails.requester) {
     await expireErrand(errandId);
     return;
   }
 
   emitToUser(nextHelperId, "errand_request", {
-    errand: {
-      id: errandDetails.id,
-      title: errandDetails.title,
-      description: errandDetails.description,
-      pickupLocation: errandDetails.pickupLocation,
-      dropoffLocation: errandDetails.dropoffLocation,
-      pickupReference: errandDetails.pickupReference,
-      suggestedPrice: errandDetails.suggestedPrice,
-      type: errandDetails.type,
-      requester: {
-        id: errandDetails.requester.id,
-        firstName: errandDetails.requester.firstName,
-        lastName: errandDetails.requester.lastName,
-        avatarUrl: errandDetails.requester.avatarUrl,
-      },
-      expiresAt: new Date(Date.now() + FIVE_MINUTES).toISOString(),
+    errandId: errandDetails.id,
+    title: errandDetails.title,
+    description: errandDetails.description,
+    pickupLocation: errandDetails.pickupLocation,
+    dropoffLocation: errandDetails.dropoffLocation,
+    pickupReference: errandDetails.pickupReference,
+    suggestedPrice: errandDetails.suggestedPrice ?? 0,
+    type: errandDetails.type,
+    requester: {
+      id: errandDetails.requester.id,
+      firstName: errandDetails.requester.firstName,
+      lastName: errandDetails.requester.lastName,
+      avatarUrl: errandDetails.requester.avatarUrl,
     },
+    expiresAt: new Date(Date.now() + FIVE_MINUTES).toISOString(),
   });
 
   state.responseTimer = setTimeout(() => {
@@ -197,7 +197,7 @@ const scheduleNextHelper = async (errandId: string) => {
       state.triedHelperIds.add(state.currentHelperId);
     }
     state.currentHelperId = undefined;
-    scheduleNextHelper(errandId);
+    scheduleHelper(errandId);
   }, FIVE_MINUTES);
 };
 
@@ -255,7 +255,7 @@ export const startErrandMatching = async (
     triedHelperIds: new Set(),
   });
 
-  await scheduleNextHelper(errand.id);
+  await scheduleHelper(errand.id);
 };
 
 export const helperAcceptErrand = async (
@@ -304,7 +304,7 @@ export const helperCounterOffer = async (
       state.triedHelperIds.add(state.currentHelperId);
     }
     state.currentHelperId = undefined;
-    scheduleNextHelper(errandId);
+    scheduleHelper(errandId);
   }, SIXTY_SECONDS);
 
   const helperProfile = await getHelperProfile(helperId);
@@ -343,7 +343,7 @@ export const requestOfferResponse = async (
   state.triedHelperIds.add(state.currentHelperId);
   state.currentHelperId = undefined;
   state.pendingOfferAmount = undefined;
-  await scheduleNextHelper(errandId);
+  await scheduleHelper(errandId);
 };
 
 export const helperDeclineErrand = async (
@@ -360,7 +360,7 @@ export const helperDeclineErrand = async (
 
   state.triedHelperIds.add(helperId);
   state.currentHelperId = undefined;
-  await scheduleNextHelper(errandId);
+  await scheduleHelper(errandId);
 };
 
 export const confirmHelper = async (errandId: string) => {
@@ -420,10 +420,10 @@ export const cancelReview = async (errandId: string) => {
 
   emitToUser(state.currentHelperId, "match_unavailable", {
     errandId,
-    message: "The requester cancelled the review window.",
+    message: "The requester cancelled",
   });
 
   state.triedHelperIds.add(state.currentHelperId);
   state.currentHelperId = undefined;
-  await scheduleNextHelper(errandId);
+  await scheduleHelper(errandId);
 };

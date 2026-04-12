@@ -39,6 +39,8 @@ export const { setCredentials, logout } = authSlice.actions;
 export const loginUser = createAsyncThunk(
   "auth/login",
   async (credentials: { user: User; token: string }, { dispatch }) => {
+    console.log("Auth slice", credentials.token);
+    await deleteToken();
     await saveToken(credentials.token);
     dispatch(setCredentials(credentials));
   },

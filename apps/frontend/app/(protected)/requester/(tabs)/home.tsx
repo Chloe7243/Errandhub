@@ -140,7 +140,7 @@ const Home = () => {
             />
           ) : (
             activeErrands?.errands.map((errand: any) => {
-              console.log({ errand });
+              // console.log({ errand });
               return (
                 <ErrandCard
                   key={errand?.id}
@@ -266,9 +266,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   errandCardContainer: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
     gap: 20,
   },
   fab: {

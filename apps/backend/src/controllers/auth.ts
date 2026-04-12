@@ -150,6 +150,8 @@ export const selectRole = async (
       avatarUrl: user.avatarUrl,
     };
 
+    console.log({ ...userData, role });
+
     const token = jwt.sign(
       { ...userData, role },
       process.env.JWT_SECRET as string,

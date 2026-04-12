@@ -45,7 +45,6 @@ const Login = () => {
     if (isLoading) return;
     try {
       const response = await login(data).unwrap();
-      console.log("Login successful:", response);
       dispatch(loginUser({ user: response.user, token: response.token }));
     } catch (error) {
       console.error("Login failed:", error);

@@ -29,7 +29,6 @@ const statusColors: Record<ErrandStatus, string> = {
   CANCELLED: "#EF4444",
   EXPIRED: "#6B7280",
   DISPUTED: "#EF4444",
-  EXPIRED: "#6B7280",
 };
 
 const ErrandCard = ({

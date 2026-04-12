@@ -9,7 +9,7 @@ import {
 } from "@errandhub/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
@@ -30,27 +30,48 @@ const CreateErrand = () => {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
-  const [taskType, setTaskType] = useState<ErrandType>("PICKUP_DELIVERY");
   const [createErrand, { isLoading }] = useCreateErrandMutation();
+
+  const prefill = useLocalSearchParams<{
+    title?: string;
+    description?: string;
+    pickupLocation?: string;
+    dropoffLocation?: string;
+    pickupReference?: string;
+    type?: ErrandType;
+  }>();
+
+  const [taskType, setTaskType] = useState<ErrandType>(
+    prefill.type ?? "PICKUP_DELIVERY",
+  );
 
   const {
     control,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<CreateErrandInput>({
     resolver: zodResolver(createErrandSchema),
-    defaultValues: { type: "PICKUP_DELIVERY" },
+    defaultValues: { type: taskType },
   });
 
+  // Pre-fill the form when arriving from a repost
   useEffect(() => {
-    console.log("form errors", errors);
-  }, [errors]);
+    if (!prefill.title) return;
+    setTaskType(prefill.type ?? "PICKUP_DELIVERY");
+    reset({
+      title: prefill.title ?? "",
+      description: prefill.description ?? "",
+      pickupLocation: prefill.pickupLocation ?? "",
+      dropoffLocation: prefill.dropoffLocation ?? "",
+      pickupReference: prefill.pickupReference ?? "",
+      type: prefill.type ?? "PICKUP_DELIVERY",
+    });
+  }, []);
 
   const onSubmit = async (data: CreateErrandInput) => {
-    console.log({ ...data, type: taskType });
     try {
       const result = await createErrand({ ...data, type: taskType }).unwrap();
-      console.log("Errand created successfully:", result);
       Toast.show({ type: "success", text1: "Errand posted successfully" });
       router.push(`/requester/errand-details?id=${result.errand.id}`);
     } catch (err) {

@@ -7,9 +7,13 @@ import {
   helperDeclineErrand,
   requestOfferResponse,
 } from "../services/matching";
+import { prisma } from "./prisma";
 
 let io: Server | null = null;
-const userSockets = new Map<string, { socketId: string; role: string }>();
+
+// Stores all active socket IDs per user so multiple tabs/devices are handled
+// correctly. A user is only considered offline when their last socket disconnects.
+const userSockets = new Map<string, { socketIds: Set<string>; role: string }>();
 
 export const initSocket = (httpServer: HttpServer) => {
   io = new Server(httpServer, {
@@ -28,6 +32,7 @@ export const initSocket = (httpServer: HttpServer) => {
         userId: string;
         role: string;
       };
+      console.log("Socket", { decoded });
       socket.data.userId = decoded.userId;
       socket.data.role = decoded.role;
       next();
@@ -37,11 +42,15 @@ export const initSocket = (httpServer: HttpServer) => {
   });
 
   io.on("connection", (socket: Socket) => {
-    console.log("User connected:", socket.data.userId);
-    userSockets.set(socket.data.userId, {
-      socketId: socket.id,
-      role: socket.data.role,
-    });
+    const { userId, role } = socket.data;
+    console.log("User connected:", userId, role, `(socketId: ${socket.id})`);
+
+    const existing = userSockets.get(userId);
+    if (existing) {
+      existing.socketIds.add(socket.id);
+    } else {
+      userSockets.set(userId, { socketIds: new Set([socket.id]), role });
+    }
 
     socket.on("join_room", (errandId: string) => {
       socket.join(errandId);
@@ -49,7 +58,7 @@ export const initSocket = (httpServer: HttpServer) => {
 
     socket.on(
       "send_message",
-      ({
+      async ({
         errandId,
         content,
         imageUrl,
@@ -58,39 +67,58 @@ export const initSocket = (httpServer: HttpServer) => {
         content?: string;
         imageUrl?: string;
       }) => {
+        if (!content && !imageUrl) return;
+
         const message = {
           id: Date.now().toString(),
-          senderId: socket.data.userId,
+          errandId,
+          senderId: userId,
           content,
           imageUrl,
           createdAt: new Date().toISOString(),
         };
-        io?.to(errandId).emit("receive_message", message);
+
+        // Deliver to both participants directly so the message arrives even
+        // when the other person isn't in the chat room.
+        const errand = await prisma.errand.findUnique({
+          where: { id: errandId },
+          select: { requesterId: true, helperId: true },
+        });
+
+        if (errand) {
+          emitToUser(errand.requesterId, "receive_message", message);
+          if (errand.helperId) {
+            emitToUser(errand.helperId, "receive_message", message);
+          }
+        } else {
+          // Fallback: broadcast to room
+          io?.to(errandId).emit("receive_message", message);
+        }
       },
     );
 
     socket.on("accept_errand", async ({ errandId }: { errandId: string }) => {
-      if (socket.data.role !== "helper") return;
-      await helperAcceptErrand(errandId, socket.data.userId);
+      if (role !== "helper") return;
+      await helperAcceptErrand(errandId, userId);
     });
 
     socket.on("decline_errand", async ({ errandId }: { errandId: string }) => {
-      if (socket.data.role !== "helper") return;
-      await helperDeclineErrand(errandId, socket.data.userId);
+      if (role !== "helper") return;
+      await helperDeclineErrand(errandId, userId);
     });
 
     socket.on(
       "counter_offer",
       async ({ errandId, amount }: { errandId: string; amount: number }) => {
-        if (socket.data.role !== "helper") return;
-        await helperCounterOffer(errandId, socket.data.userId, amount);
+        if (role !== "helper") return;
+        await helperCounterOffer(errandId, userId, amount);
       },
     );
 
     socket.on(
       "offer_response",
       async ({ errandId, accept }: { errandId: string; accept: boolean }) => {
-        if (socket.data.role !== "requester") return;
+        if (role !== "requester") return;
         await requestOfferResponse(errandId, accept);
       },
     );
@@ -100,25 +128,32 @@ export const initSocket = (httpServer: HttpServer) => {
     });
 
     socket.on("disconnect", () => {
-      console.log("User disconnected:", socket.data.userId);
-      userSockets.delete(socket.data.userId);
+      console.log("User disconnected:", userId, `(socketId: ${socket.id})`);
+      const entry = userSockets.get(userId);
+      if (entry) {
+        entry.socketIds.delete(socket.id);
+        if (entry.socketIds.size === 0) {
+          userSockets.delete(userId);
+        }
+      }
     });
   });
 
   return io;
 };
 
-export const getSocketId = (userId: string) =>
-  userSockets.get(userId)?.socketId;
 export const getConnectedHelpers = () =>
   Array.from(userSockets.entries())
     .filter(([, value]) => value.role === "helper")
     .map(([userId]) => userId);
 
+// Emits to ALL active sockets for a user (covers multiple tabs/devices)
 export const emitToUser = (userId: string, event: string, payload: any) => {
   if (!io) return false;
-  const socketId = getSocketId(userId);
-  if (!socketId) return false;
-  io.to(socketId).emit(event, payload);
+  const entry = userSockets.get(userId);
+  if (!entry || entry.socketIds.size === 0) return false;
+  for (const socketId of entry.socketIds) {
+    io.to(socketId).emit(event, payload);
+  }
   return true;
 };

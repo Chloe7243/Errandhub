@@ -13,6 +13,7 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   StyleSheet,
   Text,
@@ -33,9 +34,10 @@ type Message = {
 type ChatScreenProps = {
   errandId: string;
   otherPersonName: string;
+  otherPersonPhone?: string;
 };
 
-const ChatScreen = ({ errandId, otherPersonName }: ChatScreenProps) => {
+const ChatScreen = ({ errandId, otherPersonName, otherPersonPhone }: ChatScreenProps) => {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const flatListRef = useRef<FlatList>(null);
@@ -51,24 +53,26 @@ const ChatScreen = ({ errandId, otherPersonName }: ChatScreenProps) => {
 
   useEffect(() => {
     let mounted = true;
+    const handleReceiveMessage = (message: Message) => {
+      if (!mounted) return;
+      dispatch(addMessage({ errandId, message }));
+      setTimeout(
+        () => flatListRef.current?.scrollToEnd({ animated: true }),
+        100,
+      );
+    };
+
     const setup = async () => {
       const socket = await connectSocket();
       socket.emit("join_room", errandId);
-      socket.on("receive_message", (message: Message) => {
-        if (!mounted) return;
-        dispatch(addMessage({ errandId, message }));
-        setTimeout(
-          () => flatListRef.current?.scrollToEnd({ animated: true }),
-          100,
-        );
-      });
+      socket.on("receive_message", handleReceiveMessage);
     };
     setup();
     return () => {
       mounted = false;
       const socket = getSocket();
       socket?.emit("leave_room", errandId);
-      socket?.off("receive_message");
+      socket?.off("receive_message", handleReceiveMessage);
     };
   }, [errandId]);
 
@@ -172,7 +176,9 @@ const ChatScreen = ({ errandId, otherPersonName }: ChatScreenProps) => {
               </View>
             </View>
             <TouchableOpacity
-              style={[styles.call, { backgroundColor: colors.primary }]}
+              style={[styles.call, { backgroundColor: otherPersonPhone ? colors.primary : colors.border }]}
+              onPress={() => otherPersonPhone && Linking.openURL(`tel:${otherPersonPhone}`)}
+              disabled={!otherPersonPhone}
             >
               <Ionicons name="call-outline" size={22} color="#fff" />
             </TouchableOpacity>

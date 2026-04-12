@@ -24,7 +24,16 @@ export const createErrand = async (
       type,
     } = parsed.data;
 
-    console.log(parsed);
+    const activeErrandCount = await prisma.errand.count({
+      where: {
+        requesterId: req.userId!,
+        status: {
+          in: ["POSTED", "TENTATIVELY_ACCEPTED", "ACCEPTED", "IN_PROGRESS", "REVIEWING"],
+        },
+      },
+    });
+    if (activeErrandCount >= 3)
+      throw new AppError("You can only have 3 active errands at a time", 400);
 
     // TODO: calculate suggested price using Google Maps Distance Matrix API
     // For now use a flat suggested price
@@ -113,6 +122,7 @@ export const getErrandById = async (
             firstName: true,
             lastName: true,
             avatarUrl: true,
+            phone: true,
           },
         },
         messages: true,
@@ -122,6 +132,7 @@ export const getErrandById = async (
             firstName: true,
             lastName: true,
             avatarUrl: true,
+            phone: true,
           },
         },
       },
@@ -155,7 +166,8 @@ export const submitOffer = async (
     const existingOffer = await prisma.errandOffer.findFirst({
       where: { errandId: id, helperId: req.userId },
     });
-    if (existingOffer) throw new AppError("You have already submitted an offer", 400);
+    if (existingOffer)
+      throw new AppError("You have already submitted an offer", 400);
 
     const offer = await prisma.errandOffer.create({
       data: {
@@ -184,7 +196,9 @@ export const acceptOffer = async (
     if (errand.requesterId !== req.userId)
       throw new AppError("Unauthorised", 403);
 
-    const offer = await prisma.errandOffer.findUnique({ where: { id: offerId } });
+    const offer = await prisma.errandOffer.findUnique({
+      where: { id: offerId },
+    });
     if (!offer) throw new AppError("Offer not found", 404);
 
     await prisma.$transaction([
@@ -220,7 +234,9 @@ export const declineOffer = async (
   try {
     const { offerId } = req.params;
 
-    const offer = await prisma.errandOffer.findUnique({ where: { id: offerId } });
+    const offer = await prisma.errandOffer.findUnique({
+      where: { id: offerId },
+    });
     if (!offer) throw new AppError("Offer not found", 404);
 
     await prisma.errandOffer.update({

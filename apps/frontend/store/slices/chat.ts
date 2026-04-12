@@ -28,7 +28,20 @@ const chatSlice = createSlice({
       if (!state.messagesByErrand[errandId]) {
         state.messagesByErrand[errandId] = [];
       }
-      state.messagesByErrand[errandId].push(message);
+      // Deduplicate by id to avoid double-delivery
+      const exists = state.messagesByErrand[errandId].some(
+        (m) => m.id === message.id,
+      );
+      if (!exists) {
+        state.messagesByErrand[errandId].push(message);
+      }
+    },
+    setMessages(
+      state,
+      action: PayloadAction<{ errandId: string; messages: Message[] }>,
+    ) {
+      const { errandId, messages } = action.payload;
+      state.messagesByErrand[errandId] = messages;
     },
     clearMessages(state, action: PayloadAction<string>) {
       delete state.messagesByErrand[action.payload];
@@ -36,5 +49,5 @@ const chatSlice = createSlice({
   },
 });
 
-export const { addMessage, clearMessages } = chatSlice.actions;
+export const { addMessage, setMessages, clearMessages } = chatSlice.actions;
 export default chatSlice.reducer;

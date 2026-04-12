@@ -52,7 +52,7 @@ const RaiseDispute = () => {
   const selectedReason = watch("reason");
 
   const onSubmit = (data: DisputeForm) => {
-    console.log(data, images);
+    // console.log(data, images);
   };
 
   return (

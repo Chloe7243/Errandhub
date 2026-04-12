@@ -45,7 +45,17 @@ const ErrandHistory = () => {
     isError,
   } = useGetRequestedErrandsQuery(
     activeFilter === "ALL"
-      ? { status: ["ACCEPTED", "IN_PROGRESS", "REVIEWING", "COMPLETED", "CANCELLED", "DISPUTED", "EXPIRED"] }
+      ? {
+          status: [
+            "ACCEPTED",
+            "IN_PROGRESS",
+            "REVIEWING",
+            "COMPLETED",
+            "CANCELLED",
+            "DISPUTED",
+            "EXPIRED",
+          ],
+        }
       : { status: [activeFilter] },
     { refetchOnMountOrArgChange: true },
   );
@@ -200,7 +210,6 @@ const styles = StyleSheet.create({
   },
   filterText: { fontSize: 13, fontWeight: "500" },
   list: {
-    flex: 1,
     paddingHorizontal: 20,
     paddingBottom: 24,
     gap: 16,

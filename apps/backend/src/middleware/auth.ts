@@ -20,6 +20,8 @@ const authMiddleware = (
       role: string;
     };
 
+    console.log("Auth middleware", { decoded });
+
     req.userId = decoded.userId;
     req.role = decoded.role;
     next();

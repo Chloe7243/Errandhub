@@ -19,7 +19,6 @@ export const formatErrandStatus = (status: ErrandStatus): string => {
     CANCELLED: "Cancelled",
     EXPIRED: "Expired",
     DISPUTED: "Disputed",
-    EXPIRED: "Expired",
   };
   return labels[status];
 };

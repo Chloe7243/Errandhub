@@ -5,4 +5,5 @@ export const TAGS: constantsObj = {
   USER_SETTINGS: "user settings",
   HELPED_ERRANDS: "helped errands",
   REQUESTED_ERRANDS: "requested errands",
+  ERRAND: "errand",
 };

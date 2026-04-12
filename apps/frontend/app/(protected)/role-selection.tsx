@@ -27,8 +27,6 @@ const RoleSelection = () => {
   const user = useAppSelector((state) => state.auth.user) as User;
   const [isSelected, setIsSelected] = React.useState<Role | null>(null);
 
-  console.log("User in role selection:", user);
-
   const handleRoleSelection = async () => {
     if (isLoading) return;
     if (!isSelected) {

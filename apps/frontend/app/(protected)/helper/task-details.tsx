@@ -96,7 +96,7 @@ const HelperErrandDetails = () => {
 
   const handleMarkComplete = async () => {
     try {
-      await updateStatus({ id: id!, status: "REVIEWING" }).unwrap();
+      await updateStatus({ errandId: id!, status: "REVIEWING" }).unwrap();
       router.push(`/helper/upload-proof?errandId=${id}`);
     } catch (err) {
       displayErrorMessage(err);
@@ -105,7 +105,7 @@ const HelperErrandDetails = () => {
 
   const handleStartErrand = async () => {
     try {
-      await updateStatus({ id: id!, status: "IN_PROGRESS" }).unwrap();
+      await updateStatus({ errandId: id!, status: "IN_PROGRESS" }).unwrap();
       Toast.show({ type: "success", text1: "Errand started" });
     } catch (err) {
       displayErrorMessage(err);
@@ -263,6 +263,7 @@ const HelperErrandDetails = () => {
                       params: {
                         errandId: errand.id,
                         requesterName: `${errand.requester.firstName} ${errand.requester.lastName}`,
+                        otherPersonPhone: errand.requester.phone,
                       },
                     })
                   }

@@ -14,16 +14,8 @@ import { useEffect, useState } from "react";
 import "react-native-reanimated";
 import { Provider } from "react-redux";
 import Toast from "react-native-toast-message";
-import { deleteToken, getToken } from "@/utils/secure-store";
-import { connectSocket, getSocket } from "@/utils/socket";
+import { getToken } from "@/utils/secure-store";
 import { AuthState, loginUser } from "@/store/slices";
-import {
-  setHelperRequest,
-  setReviewWindow,
-  setCounterOffer,
-  setErrandExpired,
-  setErrandAssigned,
-} from "@/store/slices";
 import { User } from "@/types/user";
 
 SplashScreen.preventAutoHideAsync();
@@ -75,80 +67,6 @@ function RootLayoutNav() {
       router.replace(`/${user.role}/home`);
     }
   }, [isAuthenticated, user?.role]);
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    let mounted = true;
-    const setupSocket = async () => {
-      try {
-        const socket = await connectSocket();
-        if (!mounted) return;
-
-        socket.on("errand_request", (payload) => {
-          dispatch(setHelperRequest(payload));
-        });
-
-        socket.on("review_window", (payload) => {
-          dispatch(setReviewWindow(payload));
-          if (user?.role === "requester") {
-            router.push(`/requester/errand-details?id=${payload.errandId}`);
-          }
-        });
-
-        socket.on("counter_offer", (payload) => {
-          dispatch(setCounterOffer(payload));
-          if (user?.role === "requester") {
-            router.push(`/requester/errand-details?id=${payload.errandId}`);
-          }
-        });
-
-        socket.on("errand_expired", (payload) => {
-          dispatch(setErrandExpired(payload));
-          if (user?.role === "requester") {
-            router.push(`/requester/errand-details?id=${payload.errandId}`);
-          }
-          Toast.show({
-            type: "error",
-            text1: "No helpers available",
-            text2: "We could not find a helper for your errand.",
-          });
-        });
-
-        socket.on("errand_assigned", (payload) => {
-          dispatch(setErrandAssigned(payload));
-          if (user?.role === "helper") {
-            router.push(`/helper/task-details?id=${payload.errandId}`);
-          }
-        });
-
-        socket.on("match_unavailable", (payload) => {
-          if (user?.role === "helper") {
-            Toast.show({
-              type: "info",
-              text1: "Match unavailable",
-              text2: payload.message,
-            });
-          }
-        });
-      } catch (error) {
-        console.error("Socket listener setup failed", error);
-      }
-    };
-
-    setupSocket();
-
-    return () => {
-      mounted = false;
-      const socket = getSocket();
-      socket?.off("errand_request");
-      socket?.off("review_window");
-      socket?.off("counter_offer");
-      socket?.off("errand_expired");
-      socket?.off("errand_assigned");
-      socket?.off("match_unavailable");
-    };
-  }, [dispatch, isAuthenticated, router, user?.role]);
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>

@@ -1,4 +1,5 @@
 import Avatar from "@/components/avatar";
+import CounterOfferModal from "@/components/counter-offer-modal";
 import EmptyState from "@/components/empty-state";
 import ErrandStepper from "@/components/errand-stepper";
 import BackButton from "@/components/ui/back-button";
@@ -10,8 +11,13 @@ import {
   useAcceptOfferMutation,
   useDeclineOfferMutation,
 } from "@/store/api/errand";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { clearCounterOffer } from "@/store/slices";
+import type { RootState } from "@/store";
 import { formatErrandType } from "@/utils/errand";
+import { formatTimeRemaining } from "@/utils/time";
 import { displayErrorMessage } from "@/utils/errors";
+import { getSocket } from "@/utils/socket";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -22,31 +28,120 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 
 const ErrandDetails = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { currentData, isLoading } = useGetErrandByIdQuery(id!, {
+  const { currentData, isLoading, refetch } = useGetErrandByIdQuery(id!, {
     refetchOnMountOrArgChange: true,
   });
 
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
   const errand = currentData?.errand;
   const colors = Colors[colorScheme ?? "dark"];
   const [acceptOffer, { isLoading: isAccepting }] = useAcceptOfferMutation();
   const [declineOffer, { isLoading: isDeclining }] = useDeclineOfferMutation();
 
+  // Refetch when socket-driven events update this errand's state
+  const reviewWindow = useAppSelector((state: RootState) =>
+    state.matching.reviewWindow?.errandId === id
+      ? state.matching.reviewWindow
+      : null,
+  );
+  const expiredErrandId = useAppSelector(
+    (state: RootState) => state.matching.expiredErrandId,
+  );
+
+  useEffect(() => {
+    if (reviewWindow) refetch();
+  }, [reviewWindow]);
+
+  useEffect(() => {
+    if (expiredErrandId === id) refetch();
+  }, [expiredErrandId]);
+
+  // Only show the counter offer modal if it's for this errand
+  const counterOffer = useAppSelector((state: RootState) =>
+    state.matching.counterOffer?.errandId === id
+      ? state.matching.counterOffer
+      : null,
+  );
+
+  const handleCounterOfferAccept = () => {
+    const socket = getSocket();
+    if (!socket || !counterOffer) return;
+    socket.emit("offer_response", {
+      errandId: counterOffer.errandId,
+      accept: true,
+    });
+    dispatch(clearCounterOffer());
+  };
+
+  const handleCounterOfferDecline = () => {
+    const socket = getSocket();
+    if (!socket || !counterOffer) return;
+    socket.emit("offer_response", {
+      errandId: counterOffer.errandId,
+      accept: false,
+    });
+    dispatch(clearCounterOffer());
+  };
+
   const isActive = errand?.status === "IN_PROGRESS";
   const isCompleted = errand?.status === "COMPLETED";
   const isReviewing = errand?.status === "REVIEWING";
+  const isExpired = errand?.status === "EXPIRED";
   const isTerminal =
     errand?.status === "CANCELLED" || errand?.status === "DISPUTED";
   const displayAmount = errand?.agreedPrice ?? errand?.suggestedPrice;
   const pendingOffers = errand?.offers ?? [];
 
-  console.log({ errand });
+  // Seconds until the 2-minute repost cooldown expires
+  const getRepostSecondsLeft = () =>
+    errand?.updatedAt
+      ? Math.max(
+          0,
+          Math.ceil(
+            (new Date(errand.updatedAt).getTime() +
+              2 * 60 * 1000 -
+              Date.now()) /
+              1000,
+          ),
+        )
+      : 0;
+
+  const [repostSecondsLeft, setRepostSecondsLeft] =
+    useState(getRepostSecondsLeft);
+
+  useEffect(() => {
+    if (!isExpired) return;
+    setRepostSecondsLeft(getRepostSecondsLeft());
+    const interval = setInterval(() => {
+      const remaining = getRepostSecondsLeft();
+      setRepostSecondsLeft(remaining);
+      if (remaining <= 0) clearInterval(interval);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isExpired, errand?.updatedAt]);
+
+  const handleRepost = () => {
+    if (!errand) return;
+    router.push({
+      pathname: "/requester/createErrand",
+      params: {
+        title: errand.title,
+        description: errand.description,
+        pickupLocation: errand.pickupLocation,
+        dropoffLocation: errand.dropoffLocation,
+        pickupReference: errand.pickupReference ?? "",
+        type: errand.type,
+      },
+    });
+  };
 
   const handleAcceptOffer = async (offerId: string) => {
     try {
@@ -298,6 +393,7 @@ const ErrandDetails = () => {
                           params: {
                             errandId: errand.id,
                             helperName: `${errand.helper.firstName} ${errand.helper.lastName}`,
+                            otherPersonPhone: errand.helper.phone,
                           },
                         });
                       }}
@@ -312,15 +408,38 @@ const ErrandDetails = () => {
                 </View>
               ) : (
                 <View style={styles.noHelperRow}>
-                  {pendingOffers.length === 0 ? (
+                  {isExpired ? (
+                    <>
+                      <Ionicons
+                        name="time-outline"
+                        size={20}
+                        color={colors.error}
+                      />
+                      <Text
+                        style={[styles.noHelperText, { color: colors.error }]}
+                      >
+                        No helpers were available for this errand
+                      </Text>
+                    </>
+                  ) : pendingOffers.length === 0 ? (
                     <>
                       <ActivityIndicator size="small" color={colors.primary} />
                       <View style={{ flex: 1, gap: 2 }}>
-                        <Text style={[styles.noHelperText, { color: colors.text, fontWeight: "600" }]}>
+                        <Text
+                          style={[
+                            styles.noHelperText,
+                            { color: colors.text, fontWeight: "600" },
+                          ]}
+                        >
                           Searching for a helper...
                         </Text>
-                        <Text style={[styles.noHelperSubtext, { color: colors.textTertiary }]}>
-                          We'll notify you as soon as one is found
+                        <Text
+                          style={[
+                            styles.noHelperSubtext,
+                            { color: colors.textTertiary },
+                          ]}
+                        >
+                          {"We'll notify you as soon as one is found"}
                         </Text>
                       </View>
                     </>
@@ -331,7 +450,12 @@ const ErrandDetails = () => {
                         size={20}
                         color={colors.textTertiary}
                       />
-                      <Text style={[styles.noHelperText, { color: colors.textTertiary }]}>
+                      <Text
+                        style={[
+                          styles.noHelperText,
+                          { color: colors.textTertiary },
+                        ]}
+                      >
                         {`${pendingOffers.length} helper${pendingOffers.length > 1 ? "s" : ""} interested — review offers below`}
                       </Text>
                     </>
@@ -524,6 +648,54 @@ const ErrandDetails = () => {
               </TouchableOpacity>
             )}
 
+            {/* Expired — repost CTA */}
+            {isExpired && (
+              <View
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.cardRow}>
+                  <Ionicons
+                    name="refresh-outline"
+                    size={18}
+                    color={colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.locationText,
+                      { color: colors.textSecondary, flex: 1 },
+                    ]}
+                  >
+                    {repostSecondsLeft > 0
+                      ? `You can repost this errand in ${formatTimeRemaining(repostSecondsLeft)}`
+                      : "Ready to repost this errand?"}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.repostButton,
+                    {
+                      backgroundColor:
+                        repostSecondsLeft > 0 ? colors.border : colors.primary,
+                    },
+                  ]}
+                  onPress={handleRepost}
+                  disabled={repostSecondsLeft > 0}
+                >
+                  <Text style={styles.repostButtonText}>
+                    {repostSecondsLeft > 0
+                      ? `Repost in ${formatTimeRemaining(repostSecondsLeft)}`
+                      : "Repost Errand"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Terminal state notice */}
             {isTerminal && (
               <View
@@ -560,6 +732,12 @@ const ErrandDetails = () => {
           <Text style={styles.fabText}>Emergency</Text>
         </TouchableOpacity>
       )}
+
+      <CounterOfferModal
+        counterOffer={counterOffer}
+        onAccept={handleCounterOfferAccept}
+        onDecline={handleCounterOfferDecline}
+      />
     </SafeAreaView>
   );
 };
@@ -569,7 +747,6 @@ export default ErrandDetails;
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: {
-    flex: 1,
     display: "flex",
     flexDirection: "column",
     padding: 20,
@@ -670,4 +847,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   fabText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  repostButton: {
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  repostButtonText: { color: "#fff", fontWeight: "600", fontSize: 15 },
 });

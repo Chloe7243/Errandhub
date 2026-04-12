@@ -13,8 +13,6 @@ import { errorHandler } from "./middleware/errors";
 
 dotenv.config();
 const app = express();
-const httpServer = createServer(app);
-initSocket(httpServer);
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
@@ -28,6 +26,9 @@ app.use((req, res, next) => {
   );
   next();
 });
+
+const httpServer = createServer(app);
+initSocket(httpServer);
 
 // ROUTES
 app.get("/health", (req, res) => {
