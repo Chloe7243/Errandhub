@@ -27,7 +27,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 import { useAppDispatch } from "@/store/hooks";
-import { declineErrand } from "@/store/slices/helper";
 
 const HelperErrandDetails = () => {
   const router = useRouter();
@@ -72,7 +71,7 @@ const HelperErrandDetails = () => {
 
   const handleDecline = () => {
     try {
-      dispatch(declineErrand(id));
+      // socket.emit("decline_errand", { errandId, helperId: user.userId });
       router.back();
     } catch (err) {
       displayErrorMessage(err);

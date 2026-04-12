@@ -51,180 +51,187 @@ const Profile = () => {
     ]);
   };
 
-  if (isLoading) return <LoadingSpinner fullScreen />;
-  if (isError || !user)
-    return <EmptyState fullScreen isError message="Failed to load profile" />;
-
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Avatar + Name */}
-        <View style={styles.hero}>
-          <Avatar
-            firstName={user.firstName}
-            lastName={user.lastName}
-            uri={user.avatarUrl ?? undefined}
-            size={80}
-          />
-          <Text style={[styles.name, { color: colors.text }]}>
-            {user.firstName} {user.lastName}
-          </Text>
-          {user.university && (
-            <Text style={[styles.university, { color: colors.primary }]}>
-              {user.university}
+      {isLoading ? (
+        <LoadingSpinner fullScreen />
+      ) : isError || !user ? (
+        <EmptyState
+          containerStyle={{ marginHorizontal: 14 }}
+          fullScreen
+          isError
+          message="Failed to load profile"
+        />
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Avatar + Name */}
+          <View style={styles.hero}>
+            <Avatar
+              firstName={user.firstName}
+              lastName={user.lastName}
+              uri={user.avatarUrl ?? undefined}
+              size={80}
+            />
+            <Text style={[styles.name, { color: colors.text }]}>
+              {user.firstName} {user.lastName}
             </Text>
-          )}
-          <Text style={[styles.member, { color: colors.textTertiary }]}>
-            Member since {new Date(user.createdAt).toLocaleDateString()}
-          </Text>
-          {user.isVerified && (
-            <View style={styles.verifiedRow}>
-              <Ionicons
-                name="checkmark-circle"
-                size={16}
-                color={colors.success}
-              />
-              <Text style={[styles.verifiedText, { color: colors.success }]}>
-                Verified
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Settings */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          Settings
-        </Text>
-
-        <View style={styles.settings}>
-          {/* Edit Profile */}
-          <ExpandableSection
-            icon="person-outline"
-            label="Edit Profile"
-            expanded={expanded === "editProfile"}
-            onPress={() => toggle("editProfile")}
-          >
-            <Input
-              label="First Name"
-              placeholder="First name"
-              value={user.firstName}
-              onChangeText={() => {}}
-              onBlur={() => {}}
-            />
-            <Input
-              label="Last Name"
-              placeholder="Last name"
-              value={user.lastName}
-              onChangeText={() => {}}
-              onBlur={() => {}}
-            />
-            <Input
-              label="Phone Number"
-              placeholder="Phone number"
-              value={user.phone}
-              onChangeText={() => {}}
-              onBlur={() => {}}
-              keyboardType="phone-pad"
-            />
             {user.university && (
+              <Text style={[styles.university, { color: colors.primary }]}>
+                {user.university}
+              </Text>
+            )}
+            <Text style={[styles.member, { color: colors.textTertiary }]}>
+              Member since {new Date(user.createdAt).toLocaleDateString()}
+            </Text>
+            {user.isVerified && (
+              <View style={styles.verifiedRow}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={16}
+                  color={colors.success}
+                />
+                <Text style={[styles.verifiedText, { color: colors.success }]}>
+                  Verified
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Settings */}
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Settings
+          </Text>
+
+          <View style={styles.settings}>
+            {/* Edit Profile */}
+            <ExpandableSection
+              icon="person-outline"
+              label="Edit Profile"
+              expanded={expanded === "editProfile"}
+              onPress={() => toggle("editProfile")}
+            >
               <Input
-                label="University"
-                placeholder="University"
-                value={user.university}
+                label="First Name"
+                placeholder="First name"
+                value={user.firstName}
                 onChangeText={() => {}}
                 onBlur={() => {}}
               />
-            )}
-            <TouchableOpacity
-              style={[styles.saveButton, { backgroundColor: colors.primary }]}
-            >
-              <Text style={styles.saveText}>Save Changes</Text>
-            </TouchableOpacity>
-          </ExpandableSection>
-
-          {/* Payment Methods */}
-          <ExpandableSection
-            icon="card-outline"
-            label="Payment Methods"
-            expanded={expanded === "paymentMethods"}
-            onPress={() => toggle("paymentMethods")}
-          >
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.backgroundSecondary,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Ionicons
-                name="card-outline"
-                size={20}
-                color={colors.textSecondary}
+              <Input
+                label="Last Name"
+                placeholder="Last name"
+                value={user.lastName}
+                onChangeText={() => {}}
+                onBlur={() => {}}
               />
-              <Text style={[styles.cardText, { color: colors.text }]}>
-                •••• •••• •••• 4242
-              </Text>
-              <Text style={[styles.cardBadge, { color: colors.primary }]}>
-                Default
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.saveButton,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  borderWidth: 1,
-                },
-              ]}
+              <Input
+                label="Phone Number"
+                placeholder="Phone number"
+                value={user.phone}
+                onChangeText={() => {}}
+                onBlur={() => {}}
+                keyboardType="phone-pad"
+              />
+              {user.university && (
+                <Input
+                  label="University"
+                  placeholder="University"
+                  value={user.university}
+                  onChangeText={() => {}}
+                  onBlur={() => {}}
+                />
+              )}
+              <TouchableOpacity
+                style={[styles.saveButton, { backgroundColor: colors.primary }]}
+              >
+                <Text style={styles.saveText}>Save Changes</Text>
+              </TouchableOpacity>
+            </ExpandableSection>
+
+            {/* Payment Methods */}
+            <ExpandableSection
+              icon="card-outline"
+              label="Payment Methods"
+              expanded={expanded === "paymentMethods"}
+              onPress={() => toggle("paymentMethods")}
             >
-              <Ionicons name="add" size={18} color={colors.text} />
-              <Text style={[styles.saveText, { color: colors.text }]}>
-                Add Payment Method
-              </Text>
-            </TouchableOpacity>
-          </ExpandableSection>
-
-          {/* Notifications */}
-          <ExpandableSection
-            icon="notifications-outline"
-            label="Notifications"
-            expanded={expanded === "notifications"}
-            onPress={() => toggle("notifications")}
-          >
-            {["Errand updates", "New messages"].map((item) => (
-              <View key={item} style={styles.notifRow}>
-                <Text style={[styles.notifLabel, { color: colors.text }]}>
-                  {item}
+              <View
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: colors.backgroundSecondary,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="card-outline"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+                <Text style={[styles.cardText, { color: colors.text }]}>
+                  •••• •••• •••• 4242
                 </Text>
-                <TouchableOpacity
-                  style={[styles.toggle, { backgroundColor: colors.primary }]}
-                >
-                  <View style={styles.toggleDot} />
-                </TouchableOpacity>
+                <Text style={[styles.cardBadge, { color: colors.primary }]}>
+                  Default
+                </Text>
               </View>
-            ))}
-          </ExpandableSection>
-        </View>
+              <TouchableOpacity
+                style={[
+                  styles.saveButton,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                  },
+                ]}
+              >
+                <Ionicons name="add" size={18} color={colors.text} />
+                <Text style={[styles.saveText, { color: colors.text }]}>
+                  Add Payment Method
+                </Text>
+              </TouchableOpacity>
+            </ExpandableSection>
 
-        {/* Log Out */}
-        <TouchableOpacity
-          style={[styles.logoutButton, { borderColor: colors.border }]}
-          onPress={handleLogout}
-        >
-          <Ionicons name="log-out-outline" size={20} color={colors.error} />
-          <Text style={[styles.logoutText, { color: colors.error }]}>
-            Log Out
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
+            {/* Notifications */}
+            <ExpandableSection
+              icon="notifications-outline"
+              label="Notifications"
+              expanded={expanded === "notifications"}
+              onPress={() => toggle("notifications")}
+            >
+              {["Errand updates", "New messages"].map((item) => (
+                <View key={item} style={styles.notifRow}>
+                  <Text style={[styles.notifLabel, { color: colors.text }]}>
+                    {item}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.toggle, { backgroundColor: colors.primary }]}
+                  >
+                    <View style={styles.toggleDot} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ExpandableSection>
+          </View>
+
+          {/* Log Out */}
+          <TouchableOpacity
+            style={[styles.logoutButton, { borderColor: colors.border }]}
+            onPress={handleLogout}
+          >
+            <Ionicons name="log-out-outline" size={20} color={colors.error} />
+            <Text style={[styles.logoutText, { color: colors.error }]}>
+              Log Out
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 };

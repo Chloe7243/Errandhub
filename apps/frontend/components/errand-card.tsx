@@ -21,11 +21,13 @@ type Props = {
 
 const statusColors: Record<ErrandStatus, string> = {
   POSTED: "#F59E0B",
+  TENTATIVELY_ACCEPTED: "#8B5CF6",
   ACCEPTED: "#3B82F6",
   IN_PROGRESS: "#6366F1",
   REVIEWING: "#8B5CF6",
   COMPLETED: "#10B981",
   CANCELLED: "#EF4444",
+  EXPIRED: "#6B7280",
   DISPUTED: "#EF4444",
 };
 

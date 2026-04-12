@@ -1,17 +1,18 @@
 import Avatar from "@/components/avatar";
-import EmptyState from "@/components/empty-state";
 import LoadingSpinner from "@/components/ui/loading-spinner";
 import AvailabilityToggle from "@/components/availability-toggle";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import type { RootState } from "@/store";
 import {
   useGetHelpedErrandsQuery,
   useGetSettingsQuery,
 } from "@/store/api/user";
-import { useGetPostedErrandsQuery } from "@/store/api/errand";
 import { formatErrandType } from "@/utils/errand";
 import { useRouter } from "expo-router";
+import { getSocket } from "@/utils/socket";
+import { clearHelperRequest } from "@/store/slices";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import {
@@ -24,43 +25,101 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { User } from "@/types";
 
+type ErrandRequestPayload = {
+  errandId: string;
+  title: string;
+  description: string;
+  pickupLocation: string;
+  dropoffLocation: string;
+  pickupReference?: string | null;
+  suggestedPrice: number;
+  type: string;
+  requester: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    avatarUrl?: string | null;
+  };
+  expiresAt: string;
+};
+
 const HelperHome = () => {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
-  const [isAvailable, setIsAvailable] = useState(false);
-  const user = useAppSelector((state) => state.auth.user) as User;
+  const dispatch = useAppDispatch();
+  const user = useAppSelector((state: RootState) => state.auth.user) as User;
+  const helperRequest = useAppSelector(
+    (state: RootState) => state.matching.helperRequest,
+  ) as ErrandRequestPayload | null;
 
   const { currentData: activeData, isLoading } = useGetHelpedErrandsQuery(
     { status: ["ACCEPTED", "IN_PROGRESS", "REVIEWING"] },
     { refetchOnMountOrArgChange: true },
   );
-  const { currentData: postedData, isLoading: isLoadingPosted } =
-    useGetPostedErrandsQuery(undefined, {
-      refetchOnMountOrArgChange: true,
-    });
   const { currentData: settingsData } = useGetSettingsQuery(null);
-  const declinedIds = useAppSelector(
-    (state) => state.helper.declinedErrandIds,
-  ) as string[];
+
+  const [isAvailable, setIsAvailable] = useState(false);
+  const [counterAmount, setCounterAmount] = useState(0);
+  const [isNegotiationOpen, setIsNegotiationOpen] = useState(false);
 
   useEffect(() => {
-    if (settingsData?.settings)
+    if (settingsData?.settings) {
       setIsAvailable(settingsData.settings.isAvailable);
-  }, [settingsData, activeData]);
+    }
+  }, [settingsData]);
 
-  const postedErrands = (postedData?.errands ?? []).filter(
-    (e: any) => !declinedIds.includes(e.id),
-  );
+  useEffect(() => {
+    if (helperRequest) {
+      setCounterAmount(helperRequest?.suggestedPrice);
+    }
+  }, [helperRequest]);
+
   const activeTask = activeData?.errands?.[0] ?? null;
   const hasActiveTask = !!activeTask;
+  const countdownSeconds = helperRequest
+    ? Math.max(
+        0,
+        Math.ceil(
+          (new Date(helperRequest?.expiresAt).getTime() - Date.now()) / 1000,
+        ),
+      )
+    : 0;
+
+  const handleAccept = () => {
+    const socket = getSocket();
+    if (!helperRequest || !socket) return;
+    socket.emit("accept_errand", { errandId: helperRequest?.errandId });
+    dispatch(clearHelperRequest());
+  };
+
+  const handleDecline = () => {
+    const socket = getSocket();
+    if (!helperRequest || !socket) return;
+    socket.emit("decline_errand", { errandId: helperRequest?.errandId });
+    dispatch(clearHelperRequest());
+  };
+
+  const handleNegotiate = () => {
+    setIsNegotiationOpen(true);
+  };
+
+  const handleSubmitCounterOffer = () => {
+    const socket = getSocket();
+    if (!helperRequest || !socket) return;
+    socket.emit("counter_offer", {
+      errandId: helperRequest?.errandId,
+      amount: counterAmount,
+    });
+    dispatch(clearHelperRequest());
+    setIsNegotiationOpen(false);
+  };
 
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View style={styles.userInfo}>
             <Avatar
@@ -79,12 +138,10 @@ const HelperHome = () => {
           </View>
         </View>
 
-        {/* Availability Toggle */}
         <View style={styles.section}>
           <AvailabilityToggle onValueChange={setIsAvailable} />
         </View>
 
-        {/* Earnings */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Earnings
@@ -127,7 +184,6 @@ const HelperHome = () => {
           </View>
         </View>
 
-        {/* Active Task */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
             Active Task
@@ -220,23 +276,10 @@ const HelperHome = () => {
           )}
         </View>
 
-        {/* Available Tasks */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Available Tasks
-            </Text>
-            {postedErrands.length > 0 && !hasActiveTask && isAvailable && (
-              <TouchableOpacity
-                onPress={() => router.push("/helper/browse-errands")}
-              >
-                <Text style={[styles.viewAll, { color: colors.primary }]}>
-                  View all
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Dispatch
+          </Text>
           {!isAvailable ? (
             <View
               style={[
@@ -258,7 +301,7 @@ const HelperHome = () => {
                   { color: colors.textSecondary },
                 ]}
               >
-                Toggle availability on to see and receive nearby tasks
+                Toggle availability on to receive urgent errand requests.
               </Text>
             </View>
           ) : hasActiveTask ? (
@@ -282,112 +325,198 @@ const HelperHome = () => {
                   { color: colors.textSecondary },
                 ]}
               >
-                Complete your current task to pick up a new one
+                Complete your current task to receive a new dispatch.
               </Text>
             </View>
-          ) : isLoadingPosted ? (
-            <EmptyState
-              variant="card"
-              icon="hourglass-outline"
-              message="Looking for tasks..."
-            />
-          ) : postedErrands.length === 0 ? (
-            <EmptyState
-              variant="card"
-              icon="map-outline"
-              message="No tasks available right now"
-            />
           ) : (
-            postedErrands.slice(0, 3).map((errand: any) => (
-              <TouchableOpacity
-                key={errand.id}
-                style={[
-                  styles.taskCard,
-                  {
-                    backgroundColor: colors.backgroundSecondary,
-                    borderColor: colors.border,
-                  },
-                ]}
-                onPress={() =>
-                  router.push(`/helper/task-details?id=${errand.id}`)
-                }
-                activeOpacity={0.8}
+            <View
+              style={[
+                styles.emptyTask,
+                {
+                  backgroundColor: colors.backgroundSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name="hourglass-outline"
+                size={28}
+                color={colors.textTertiary}
+              />
+              <Text
+                style={[styles.emptyTaskText, { color: colors.textSecondary }]}
               >
-                <View style={styles.taskCardHeader}>
-                  <View
-                    style={[
-                      styles.badge,
-                      { backgroundColor: colors.primary + "20" },
-                    ]}
-                  >
-                    <Text style={[styles.badgeText, { color: colors.primary }]}>
-                      {formatErrandType(errand.type)}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[styles.activeTaskPrice, { color: colors.primary }]}
-                  >
-                    £
-                    {(errand.agreedPrice ?? errand.suggestedPrice ?? 0).toFixed(
-                      2,
-                    )}
-                  </Text>
-                </View>
-                <Text
-                  style={[styles.activeTaskTitle, { color: colors.text }]}
-                  numberOfLines={1}
-                >
-                  {errand.title}
-                </Text>
-                <View style={styles.locationRow}>
-                  <Ionicons
-                    name="location-outline"
-                    size={14}
-                    color={colors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.locationText,
-                      { color: colors.textSecondary },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {errand.pickupLocation}
-                  </Text>
-                </View>
-                <View
-                  style={[styles.divider, { backgroundColor: colors.border }]}
-                />
-                <View style={styles.taskCardFooter}>
-                  <View style={styles.requesterRow}>
-                    <Avatar
-                      firstName={errand.requester?.firstName ?? ""}
-                      lastName={errand.requester?.lastName ?? ""}
-                      size={24}
-                    />
-                    <Text
-                      style={[
-                        styles.requesterName,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      {errand.requester?.firstName} {errand.requester?.lastName}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.locationText,
-                      { color: colors.textTertiary },
-                    ]}
-                  >
-                    {new Date(errand.createdAt).toLocaleDateString()}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))
+                Waiting for a new errand to be dispatched to you.
+              </Text>
+              <Text
+                style={[styles.emptyTaskLabel, { color: colors.textTertiary }]}
+              >
+                Stay available and online to receive the next request.
+              </Text>
+            </View>
           )}
         </View>
       </ScrollView>
+
+      {helperRequest ? (
+        <View
+          style={[styles.overlay, { backgroundColor: colors.surface + "CC" }]}
+        >
+          <View
+            style={[
+              styles.modal,
+              {
+                backgroundColor: colors.backgroundSecondary,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              New Dispatch Request
+            </Text>
+            <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>
+              From {helperRequest?.requester?.firstName || ""}{" "}
+              {helperRequest?.requester?.lastName || ""}
+            </Text>
+            <Text style={[styles.modalText, { color: colors.text }]}>
+              {helperRequest.title}
+            </Text>
+            <Text style={[styles.modalInfo, { color: colors.textSecondary }]}>
+              Pickup: {helperRequest.pickupLocation}
+            </Text>
+            <Text style={[styles.modalInfo, { color: colors.textSecondary }]}>
+              Drop-off: {helperRequest.dropoffLocation}
+            </Text>
+            <Text style={[styles.modalInfo, { color: colors.textSecondary }]}>
+              Suggested: £{helperRequest?.suggestedPrice?.toFixed(2)}
+            </Text>
+            <Text style={[styles.countdown, { color: colors.primary }]}>
+              Respond in {countdownSeconds}s
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: colors.primary },
+                ]}
+                onPress={handleAccept}
+              >
+                <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                  Accept
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: colors.surface },
+                ]}
+                onPress={handleNegotiate}
+              >
+                <Text style={[styles.modalButtonText, { color: colors.text }]}>
+                  Negotiate
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: "#EF4444" }]}
+                onPress={handleDecline}
+              >
+                <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                  Decline
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      {isNegotiationOpen ? (
+        <View
+          style={[styles.overlay, { backgroundColor: colors.surface + "CC" }]}
+        >
+          <View
+            style={[
+              styles.modal,
+              {
+                backgroundColor: colors.backgroundSecondary,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Counter Offer
+            </Text>
+            <Text style={[styles.modalInfo, { color: colors.textSecondary }]}>
+              Adjust the price in £0.50 increments.
+            </Text>
+            <View style={styles.counterRow}>
+              <TouchableOpacity
+                style={[
+                  styles.counterButton,
+                  { backgroundColor: colors.background },
+                ]}
+                onPress={() =>
+                  setCounterAmount((prev) =>
+                    Math.max(helperRequest?.suggestedPrice ?? 0, prev - 0.5),
+                  )
+                }
+              >
+                <Text
+                  style={[styles.counterButtonText, { color: colors.text }]}
+                >
+                  -
+                </Text>
+              </TouchableOpacity>
+              <Text style={[styles.counterAmount, { color: colors.text }]}>
+                £{counterAmount.toFixed(2)}
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.counterButton,
+                  { backgroundColor: colors.background },
+                ]}
+                onPress={() =>
+                  setCounterAmount((prev) =>
+                    Math.min(
+                      (helperRequest?.suggestedPrice ?? 0) * 2,
+                      prev + 0.5,
+                    ),
+                  )
+                }
+              >
+                <Text
+                  style={[styles.counterButtonText, { color: colors.text }]}
+                >
+                  +
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: colors.primary },
+                ]}
+                onPress={handleSubmitCounterOffer}
+              >
+                <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                  Send Offer
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: colors.surface },
+                ]}
+                onPress={() => setIsNegotiationOpen(false)}
+              >
+                <Text style={[styles.modalButtonText, { color: colors.text }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 };
@@ -405,30 +534,13 @@ const styles = StyleSheet.create({
   userInfo: { flexDirection: "row", alignItems: "center", gap: 12 },
   greeting: { fontSize: 14 },
   name: { fontSize: 18, fontWeight: "600" },
-  availabilityRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    gap: 12,
-  },
-  availabilityTitle: { fontSize: 14, fontWeight: "600", marginBottom: 2 },
-  availabilitySubtitle: { fontSize: 12 },
   section: {
     paddingHorizontal: 16,
     paddingTop: 20,
     gap: 12,
     paddingBottom: 4,
   },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
   sectionTitle: { fontSize: 16, fontWeight: "600" },
-  viewAll: { fontSize: 14, fontWeight: "600" },
   cardsRow: { flexDirection: "row", gap: 10 },
   card: { flex: 1, padding: 12, borderRadius: 10, borderWidth: 1, gap: 6 },
   cardValue: { fontSize: 18, fontWeight: "700" },
@@ -440,7 +552,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  emptyTaskText: { fontSize: 13 },
+  emptyTaskText: { fontSize: 13, textAlign: "center" },
+  emptyTaskLabel: { fontSize: 12, textAlign: "center" },
   activeTaskCard: {
     padding: 16,
     borderRadius: 10,
@@ -452,20 +565,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  taskCard: { padding: 14, borderRadius: 10, borderWidth: 1, gap: 8 },
-  taskCardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  taskCardFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  divider: { height: 1 },
-  requesterRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  requesterName: { fontSize: 12 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   badgeText: { fontSize: 12, fontWeight: "600" },
   activeTaskPrice: { fontSize: 16, fontWeight: "700" },
@@ -490,4 +589,53 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   unavailableText: { fontSize: 13, textAlign: "center", lineHeight: 20 },
+  overlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modal: {
+    width: "100%",
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 20,
+    gap: 16,
+  },
+  modalTitle: { fontSize: 18, fontWeight: "700" },
+  modalLabel: { fontSize: 13 },
+  modalText: { fontSize: 15, fontWeight: "600" },
+  modalInfo: { fontSize: 13 },
+  countdown: { fontSize: 14, fontWeight: "700" },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  modalButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  modalButtonText: { fontWeight: "700" },
+  counterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  counterButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  counterButtonText: { fontSize: 20, fontWeight: "700" },
+  counterAmount: { fontSize: 18, fontWeight: "700" },
 });

@@ -14,11 +14,13 @@ datasource db {
 
 enum ErrandStatus {
   POSTED
+  TENTATIVELY_ACCEPTED
   ACCEPTED
   IN_PROGRESS
   REVIEWING
   COMPLETED
   CANCELLED
+  EXPIRED
   DISPUTED
 }
 
@@ -108,23 +110,25 @@ model UserSettings {
 }
 
 model Errand {
-  id              String       @id @default(cuid())
-  requesterId     String
-  helperId        String?
-  title           String
-  description     String
-  pickupLocation  String
-  dropoffLocation String
-  pickupReference String?
-  suggestedPrice  Float?
-  agreedPrice     Float?
-  status          ErrandStatus @default(POSTED)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  proofImageUrl   String?
-  proofNote       String?
-  completedAt     DateTime?
-  type            ErrandType
+  id                    String       @id @default(cuid())
+  requesterId           String
+  helperId              String?
+  title                 String
+  description           String
+  pickupLocation        String
+  dropoffLocation       String
+  pickupReference       String?
+  suggestedPrice        Float?
+  agreedPrice           Float?
+  status                ErrandStatus @default(POSTED)
+  reviewWindowExpiresAt DateTime?
+  consecutiveCancels    Int          @default(0)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  proofImageUrl         String?
+  proofNote             String?
+  completedAt           DateTime?
+  type                  ErrandType
   // complexity      Complexity
 
   payment   PaymentTransaction? @relation("ErrandPayment")

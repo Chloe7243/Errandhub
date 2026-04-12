@@ -3,6 +3,7 @@ import { AuthRequest } from "../types/auth";
 import { AppError } from "../middleware/errors";
 import { Response, NextFunction } from "express";
 import { createErrandSchema } from "@errandhub/shared";
+import { startErrandMatching } from "../services/matching";
 
 export const createErrand = async (
   req: AuthRequest,
@@ -41,6 +42,8 @@ export const createErrand = async (
         suggestedPrice,
       },
     });
+
+    await startErrandMatching(errand);
 
     res.status(201).json({ errand, message: "Errand created successfully" });
   } catch (error) {
@@ -283,7 +286,8 @@ export const updateErrandStatus = async (
     if (!errand) throw new AppError("Errand not found", 404);
 
     const allowedTransitions: Record<string, string[]> = {
-      POSTED: ["ACCEPTED", "CANCELLED"],
+      POSTED: ["TENTATIVELY_ACCEPTED", "CANCELLED", "EXPIRED"],
+      TENTATIVELY_ACCEPTED: ["ACCEPTED", "POSTED"],
       ACCEPTED: ["IN_PROGRESS", "CANCELLED"],
       IN_PROGRESS: ["REVIEWING", "CANCELLED"],
       REVIEWING: ["COMPLETED", "DISPUTED"],
@@ -319,6 +323,14 @@ export const updateErrandStatus = async (
       data: {
         status,
         ...(status === "COMPLETED" && { completedAt: new Date() }),
+        ...(status === "POSTED" && {
+          helperId: null,
+          reviewWindowExpiresAt: null,
+        }),
+        ...(status === "EXPIRED" && {
+          helperId: null,
+          reviewWindowExpiresAt: null,
+        }),
       },
     });
 

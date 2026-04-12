@@ -2,13 +2,13 @@ import { api } from "./api";
 import { configureStore } from "@reduxjs/toolkit";
 import authReducer from "./slices/auth-slice";
 import chatReducer from "./slices/chat";
-import helperReducer from "./slices/helper";
+import matchingReducer from "./slices/matching";
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
     chat: chatReducer,
-    helper: helperReducer,
+    matching: matchingReducer,
     [api.reducerPath]: api.reducer,
   },
   middleware: (getDefaultMiddleware) =>

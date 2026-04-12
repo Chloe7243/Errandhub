@@ -1,0 +1,117 @@
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+
+type HelperProfile = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl?: string | null;
+  completedCount?: number;
+};
+
+type ErrandRequestPayload = {
+  errandId: string;
+  title: string;
+  description: string;
+  pickupLocation: string;
+  dropoffLocation: string;
+  pickupReference?: string | null;
+  suggestedPrice: number;
+  type: string;
+  requester: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    avatarUrl?: string | null;
+  };
+  expiresAt: string;
+};
+
+type ReviewWindowPayload = {
+  errandId: string;
+  helper: HelperProfile;
+  agreedPrice: number;
+  expiresAt: string;
+};
+
+type CounterOfferPayload = {
+  errandId: string;
+  helper: HelperProfile;
+  amount: number;
+  expiresAt: string;
+};
+
+type MatchingState = {
+  helperRequest: ErrandRequestPayload | null;
+  reviewWindow: ReviewWindowPayload | null;
+  counterOffer: CounterOfferPayload | null;
+  expiredErrandId: string | null;
+  assignedErrandId: string | null;
+};
+
+const initialState: MatchingState = {
+  helperRequest: null,
+  reviewWindow: null,
+  counterOffer: null,
+  expiredErrandId: null,
+  assignedErrandId: null,
+};
+
+const matchingSlice = createSlice({
+  name: "matching",
+  initialState,
+  reducers: {
+    setHelperRequest(state, action: PayloadAction<ErrandRequestPayload>) {
+      state.helperRequest = action.payload;
+    },
+    clearHelperRequest(state) {
+      state.helperRequest = null;
+    },
+    setReviewWindow(state, action: PayloadAction<ReviewWindowPayload>) {
+      state.reviewWindow = action.payload;
+    },
+    clearReviewWindow(state) {
+      state.reviewWindow = null;
+    },
+    setCounterOffer(state, action: PayloadAction<CounterOfferPayload>) {
+      state.counterOffer = action.payload;
+    },
+    clearCounterOffer(state) {
+      state.counterOffer = null;
+    },
+    setErrandExpired(state, action: PayloadAction<{ errandId: string }>) {
+      state.expiredErrandId = action.payload.errandId;
+    },
+    clearErrandExpired(state) {
+      state.expiredErrandId = null;
+    },
+    setErrandAssigned(state, action: PayloadAction<{ errandId: string }>) {
+      state.assignedErrandId = action.payload.errandId;
+    },
+    clearErrandAssigned(state) {
+      state.assignedErrandId = null;
+    },
+    resetMatching(state) {
+      state.helperRequest = null;
+      state.reviewWindow = null;
+      state.counterOffer = null;
+      state.expiredErrandId = null;
+      state.assignedErrandId = null;
+    },
+  },
+});
+
+export const {
+  setHelperRequest,
+  clearHelperRequest,
+  setReviewWindow,
+  clearReviewWindow,
+  setCounterOffer,
+  clearCounterOffer,
+  setErrandExpired,
+  clearErrandExpired,
+  setErrandAssigned,
+  clearErrandAssigned,
+  resetMatching,
+} = matchingSlice.actions;
+
+export default matchingSlice.reducer;
