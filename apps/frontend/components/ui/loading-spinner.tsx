@@ -1,30 +1,44 @@
 import { ActivityIndicator, StyleSheet, View } from "react-native";
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import { Colors } from "@/constants/theme";
 
-type Props = {
+type BaseProps = {
   color?: string;
-  size?: "small" | "large";
   fullScreen?: boolean;
 };
 
+type SizeProps = BaseProps & {
+  size?: "small" | "large";
+  customSize?: never;
+};
+
+/** Scale multiplier. Recommended range: 1-3 */
+type CustomSizeProps = BaseProps & { customSize: number; size?: never };
+
+type Props = SizeProps | CustomSizeProps;
+
 const LoadingSpinner = ({
   color,
-  size = "large",
+  size,
+  customSize = 1,
   fullScreen = false,
 }: Props) => {
-  const colorScheme = useColorScheme();
-  const colors = Colors[colorScheme ?? "dark"];
-
   if (fullScreen) {
     return (
-      <View style={[styles.fullScreen, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size={size} color={colors.primary} />
+      <View style={[styles.fullScreen]}>
+        <ActivityIndicator
+          color={color}
+          style={{ transform: [{ scale: customSize }] }}
+        />
       </View>
     );
   }
 
-  return <ActivityIndicator size={size} color={color} />;
+  return (
+    <ActivityIndicator
+      size={size}
+      style={{ height: customSize }}
+      color={color}
+    />
+  );
 };
 
 export default LoadingSpinner;

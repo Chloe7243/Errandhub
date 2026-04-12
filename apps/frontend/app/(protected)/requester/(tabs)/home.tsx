@@ -1,10 +1,13 @@
 import Avatar from "@/components/avatar";
+import EmptyState from "@/components/empty-state";
 import ErrandCard from "@/components/errand-card";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
+import { useGetRequestedErrandsQuery } from "@/store/api/user";
 import { useAppSelector } from "@/store/hooks";
 import { User } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { Link, useRouter } from "expo-router";
 import {
   ScrollView,
   StyleSheet,
@@ -17,13 +20,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const Home = () => {
   const router = useRouter();
-  const anyActiveErrands = true;
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const user = useAppSelector((state) => state.auth.user) as User;
+  const { currentData: activeErrands, isLoading } = useGetRequestedErrandsQuery(
+    {
+      status: ["ACCEPTED", "IN_PROGRESS", "POSTED"],
+    },
+    { refetchOnMountOrArgChange: true },
+  );
 
-  console.log("User in Home screen:", user);
+  const numberOfActiveErrands = activeErrands?.errands.length || 0;
+  const numberOfCompletedErrands = activeErrands?.errands.length || 0;
+
+  const anyActiveErrands =
+    (activeErrands?.errands && activeErrands?.errands.length !== 0) || false;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -68,19 +80,25 @@ const Home = () => {
 
         <View style={[styles.info]}>
           <View style={[styles.card, { backgroundColor: colors.background }]}>
-            <Text style={[styles.cardValue, { color: colors.text }]}>3</Text>
+            <Text style={[styles.cardValue, { color: colors.text }]}>
+              {numberOfActiveErrands}
+            </Text>
             <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
               Active Errands
             </Text>
           </View>
           <View style={[styles.card, { backgroundColor: colors.background }]}>
-            <Text style={[styles.cardValue, { color: colors.text }]}>12</Text>
+            <Text style={[styles.cardValue, { color: colors.text }]}>
+              {numberOfCompletedErrands}
+            </Text>
             <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
               Completed Errands
             </Text>
           </View>
           <View style={[styles.card, { backgroundColor: colors.background }]}>
-            <Text style={[styles.cardValue, { color: colors.text }]}>4.8</Text>
+            <Text style={[styles.cardValue, { color: colors.text }]}>
+              {user?.rating?.toFixed(1) || "N/A"}
+            </Text>
             <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
               Rating
             </Text>
@@ -101,50 +119,48 @@ const Home = () => {
           <Text style={[styles.title, { color: colors.text }]}>
             Active Errands
           </Text>
-          <Text
+          <Link
+            href="/requester/errands"
             style={{ fontWeight: "600", fontSize: 16, color: colors.primary }}
           >
             View all
-          </Text>
+          </Link>
         </View>
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.errandCardContainer]}
         >
-          {/* Map through active errands here */}
-          <ErrandCard
-            type="Standard"
-            status="active"
-            title="Pick up groceries"
-            location="2 miles away"
-            amount="$15.00"
-            time="10 mins ago"
-            helperFirstName="John"
-            helperLastName="Doe"
-            onPress={() => router.push("/requester/errand-details")}
-          />
-          <ErrandCard
-            type="Standard"
-            status="active"
-            title="Pick up groceries"
-            location="2 miles away"
-            amount="$15.00"
-            time="10 mins ago"
-            helperFirstName="John"
-            helperLastName="Doe"
-            onPress={() => router.push("/requester/errand-details")}
-          />
-          <ErrandCard
-            type="Standard"
-            status="active"
-            title="Pick up groceries"
-            location="2 miles away"
-            amount="$15.00"
-            time="10 mins ago"
-            helperFirstName="John"
-            helperLastName="Doe"
-            onPress={() => router.push("/requester/errand-details")}
-          />
+          {isLoading ? (
+            <LoadingSpinner fullScreen color="#fff" customSize={1.5} />
+          ) : !anyActiveErrands ? (
+            <EmptyState
+              fullScreen
+              message="No active errands available"
+              icon="notifications-off-outline"
+            />
+          ) : (
+            activeErrands?.errands.map((errand: any) => {
+              console.log({ errand });
+              return (
+                <ErrandCard
+                  key={errand?.id}
+                  type={errand?.type}
+                  status={errand?.status}
+                  title={errand?.title}
+                  location={errand?.pickupLocation}
+                  amount={errand?.amount}
+                  time={errand?.time}
+                  helperFirstName={errand?.helper?.firstName}
+                  helperLastName={errand?.helper?.lastName}
+                  onPress={() =>
+                    router.push(
+                      `/requester/errand-details?id=${errand?.id || ""}`,
+                    )
+                  }
+                />
+              );
+            })
+          )}
         </ScrollView>
       </View>
     </View>
@@ -250,6 +266,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   errandCardContainer: {
+    flex: 1,
     display: "flex",
     flexDirection: "column",
     gap: 20,

@@ -1,16 +1,13 @@
-// app/helper/errand-history.tsx
 import Avatar from "@/components/avatar";
+import EmptyState from "@/components/empty-state";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 import BackButton from "@/components/ui/back-button";
 import { Colors } from "@/constants/theme";
-import {
-  AlertTriangle,
-  CheckCircle,
-  ChevronLeft,
-  ChevronRight,
-  Filter,
-  TrendingUp,
-} from "lucide-react-native";
-import React, { useState } from "react";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useGetHelpedErrandsQuery } from "@/store/api/user";
+import { formatErrandStatus, formatErrandType } from "@/utils/errand";
+import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
 import {
   FlatList,
   Modal,
@@ -18,339 +15,284 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  useColorScheme,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ErrandStatus } from "@errandhub/shared";
 
-type ErrandStatus = "completed" | "disputed";
+type Filter = "ALL" | "COMPLETED" | "DISPUTED";
 
-type Errand = {
-  id: string;
-  title: string;
-  price: string;
-  date: string;
-  requester: { firstName: string; lastName: string };
-  status: ErrandStatus;
-  distance: string;
-};
-
-type FilterOption = "all" | ErrandStatus;
-
-const MOCK_ERRANDS: Errand[] = [
-  {
-    id: "1",
-    title: "Pick up dry cleaning",
-    price: "$5.00",
-    date: "26 Feb 2026",
-    requester: { firstName: "Sarah", lastName: "L" },
-    status: "completed",
-    distance: "2.5km",
-  },
-  {
-    id: "2",
-    title: "Grocery run",
-    price: "$12.00",
-    date: "25 Feb 2026",
-    requester: { firstName: "James", lastName: "K" },
-    status: "completed",
-    distance: "1.2km",
-  },
-  {
-    id: "3",
-    title: "Drop off parcel",
-    price: "$8.00",
-    date: "24 Feb 2026",
-    requester: { firstName: "Priya", lastName: "M" },
-    status: "disputed",
-    distance: "3.1km",
-  },
-  {
-    id: "4",
-    title: "Pharmacy pickup",
-    price: "$6.00",
-    date: "22 Feb 2026",
-    requester: { firstName: "Tom", lastName: "B" },
-    status: "completed",
-    distance: "0.8km",
-  },
-  {
-    id: "5",
-    title: "Post office drop off",
-    price: "$4.00",
-    date: "20 Feb 2026",
-    requester: { firstName: "Emma", lastName: "W" },
-    status: "completed",
-    distance: "1.5km",
-  },
-  {
-    id: "6",
-    title: "Book return to library",
-    price: "$3.50",
-    date: "18 Feb 2026",
-    requester: { firstName: "Liam", lastName: "O" },
-    status: "disputed",
-    distance: "2.0km",
-  },
+const FILTERS: { label: string; value: Filter }[] = [
+  { label: "All", value: "ALL" },
+  { label: "Completed", value: "COMPLETED" },
+  { label: "Disputed", value: "DISPUTED" },
 ];
 
-const FILTER_OPTIONS: { label: string; value: FilterOption }[] = [
-  { label: "All", value: "all" },
-  { label: "Completed", value: "completed" },
-  { label: "Disputed", value: "disputed" },
-];
-
-const ErrandHistory = ({ onBack }: { onBack: () => void }) => {
+const HelperErrandHistory = () => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
-  const [activeFilter, setActiveFilter] = useState<FilterOption>("all");
-  const [selectedErrand, setSelectedErrand] = useState<Errand | null>(null);
+  const [activeFilter, setActiveFilter] = useState<Filter>("ALL");
+  const [selectedErrand, setSelectedErrand] = useState<any | null>(null);
 
-  const filteredErrands =
-    activeFilter === "all"
-      ? MOCK_ERRANDS
-      : MOCK_ERRANDS.filter((e) => e.status === activeFilter);
+  const {
+    currentData: data,
+    isLoading,
+    isError,
+  } = useGetHelpedErrandsQuery(
+    activeFilter === "ALL"
+      ? { status: ["COMPLETED", "DISPUTED"] }
+      : { status: [activeFilter] },
+    { refetchOnMountOrArgChange: true },
+  );
 
-  const totalEarned = MOCK_ERRANDS.filter(
-    (e) => e.status === "completed",
-  ).reduce((sum, e) => sum + parseFloat(e.price.replace("$", "")), 0);
+  const errands = data?.errands ?? [];
 
-  const totalCompleted = MOCK_ERRANDS.filter(
-    (e) => e.status === "completed",
-  ).length;
-
-  const totalDisputed = MOCK_ERRANDS.filter(
-    (e) => e.status === "disputed",
-  ).length;
-
-  const getStatusColor = (status: ErrandStatus): string =>
-    status === "completed" ? colors.success : colors.error;
-
-  const getStatusIcon = (status: ErrandStatus) =>
-    status === "completed" ? (
-      <CheckCircle size={14} color={colors.success} />
-    ) : (
-      <AlertTriangle size={14} color={colors.error} />
+  const totalEarned = errands
+    .filter((e: any) => e.status === "COMPLETED")
+    .reduce(
+      (sum: number, e: any) => sum + (e.agreedPrice ?? e.suggestedPrice ?? 0),
+      0,
     );
+
+  const totalCompleted = errands.filter(
+    (e: any) => e.status === "COMPLETED",
+  ).length;
+  const totalDisputed = errands.filter(
+    (e: any) => e.status === "DISPUTED",
+  ).length;
+
+  const getStatusColor = (status: ErrandStatus) =>
+    status === "COMPLETED" ? colors.success : colors.error;
+
+  const getStatusIcon = (status: ErrandStatus) => (
+    <Ionicons
+      name={
+        status === "COMPLETED" ? "checkmark-circle-outline" : "warning-outline"
+      }
+      size={14}
+      color={getStatusColor(status)}
+    />
+  );
 
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      {/* Nav Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            borderBottomColor: colors.border,
-            backgroundColor: colors.background,
-          },
-        ]}
-      >
-        <BackButton
-          noText
-          onBack={onBack}
-          icon={<ChevronLeft size={22} color={colors.text} />}
+      {isLoading ? (
+        <LoadingSpinner fullScreen customSize={1.5} />
+      ) : isError ? (
+        <EmptyState
+          fullScreen
+          isError
+          message="Failed to load errand history"
         />
-
-        <Text style={[styles.pageTitle, { color: colors.text }]}>
-          Errand History
-        </Text>
-        <View style={{ width: 36 }} />
-      </View>
-
-      <FlatList
-        data={filteredErrands}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={
-          <>
-            {/* Summary Cards */}
-            <View style={styles.section}>
-              <View style={styles.cardsRow}>
-                <View
-                  style={[
-                    styles.card,
-                    {
-                      backgroundColor: colors.backgroundSecondary,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  <TrendingUp size={18} color={colors.success} />
-                  <Text style={[styles.cardValue, { color: colors.text }]}>
-                    £{totalEarned.toFixed(2)}
-                  </Text>
-                  <Text
-                    style={[styles.cardTitle, { color: colors.textSecondary }]}
-                  >
-                    Total Earned
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.card,
-                    {
-                      backgroundColor: colors.backgroundSecondary,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  <CheckCircle size={18} color={colors.primary} />
-                  <Text style={[styles.cardValue, { color: colors.text }]}>
-                    {totalCompleted}
-                  </Text>
-                  <Text
-                    style={[styles.cardTitle, { color: colors.textSecondary }]}
-                  >
-                    Completed
-                  </Text>
-                </View>
-                <View
-                  style={[
-                    styles.card,
-                    {
-                      backgroundColor: colors.backgroundSecondary,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
-                  <AlertTriangle size={18} color={colors.error} />
-                  <Text style={[styles.cardValue, { color: colors.text }]}>
-                    {totalDisputed}
-                  </Text>
-                  <Text
-                    style={[styles.cardTitle, { color: colors.textSecondary }]}
-                  >
-                    Disputed
-                  </Text>
-                </View>
+      ) : (
+        <FlatList
+          data={errands}
+          keyExtractor={(item: any) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.listContent]}
+          ListHeaderComponent={
+            <>
+              {/* Header */}
+              <View
+                style={[styles.header, { borderBottomColor: colors.border }]}
+              >
+                <BackButton />
+                <Text style={[styles.pageTitle, { color: colors.text }]}>
+                  Errand History
+                </Text>
+                <View style={{ width: 40 }} />
               </View>
-            </View>
 
-            {/* Filter */}
-            <View style={styles.filterSection}>
-              <Filter size={14} color={colors.textSecondary} />
-              <View style={styles.filterRow}>
-                {FILTER_OPTIONS.map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.filterOption,
-                      {
-                        backgroundColor:
-                          activeFilter === option.value
-                            ? colors.primary
-                            : colors.backgroundSecondary,
-                        borderColor:
-                          activeFilter === option.value
-                            ? colors.primary
-                            : colors.border,
-                      },
-                    ]}
-                    onPress={() => setActiveFilter(option.value)}
-                    activeOpacity={0.7}
-                  >
-                    <Text
+              {/* Summary Cards */}
+              <View style={styles.section}>
+                <View style={styles.cardsRow}>
+                  {[
+                    {
+                      label: "Total Earned",
+                      value: `£${totalEarned.toFixed(2)}`,
+                      icon: "trending-up-outline",
+                      color: colors.success,
+                    },
+                    {
+                      label: "Completed",
+                      value: String(totalCompleted),
+                      icon: "checkmark-circle-outline",
+                      color: colors.primary,
+                    },
+                    {
+                      label: "Disputed",
+                      value: String(totalDisputed),
+                      icon: "warning-outline",
+                      color: colors.error,
+                    },
+                  ].map((stat) => (
+                    <View
+                      key={stat.label}
                       style={[
-                        styles.filterOptionText,
+                        styles.card,
                         {
-                          color:
-                            activeFilter === option.value
-                              ? "#fff"
-                              : colors.textSecondary,
+                          backgroundColor: colors.backgroundSecondary,
+                          borderColor: colors.border,
                         },
                       ]}
                     >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <Text style={[styles.resultsCount, { color: colors.textTertiary }]}>
-              {filteredErrands.length} errand
-              {filteredErrands.length !== 1 ? "s" : ""}
-            </Text>
-          </>
-        }
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.errandCard,
-              {
-                backgroundColor: colors.backgroundSecondary,
-                borderColor: colors.border,
-              },
-            ]}
-            activeOpacity={0.75}
-            onPress={() => setSelectedErrand(item)}
-          >
-            <View style={styles.errandCardHeader}>
-              <View style={styles.errandCardLeft}>
-                <Avatar
-                  firstName={item.requester.firstName}
-                  lastName={item.requester.lastName}
-                  size={38}
-                />
-                <View>
-                  <Text style={[styles.errandTitle, { color: colors.text }]}>
-                    {item.title}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.errandRequester,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    {item.requester.firstName} {item.requester.lastName} ·{" "}
-                    {item.distance}
-                  </Text>
+                      <Ionicons
+                        name={stat.icon as any}
+                        size={18}
+                        color={stat.color}
+                      />
+                      <Text style={[styles.cardValue, { color: colors.text }]}>
+                        {stat.value}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.cardLabel,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        {stat.label}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               </View>
-              <ChevronRight size={16} color={colors.textTertiary} />
-            </View>
 
-            <View
-              style={[styles.divider, { backgroundColor: colors.border }]}
-            />
+              {/* Filters */}
+              <View style={styles.filterSection}>
+                <Ionicons
+                  name="filter-outline"
+                  size={14}
+                  color={colors.textSecondary}
+                />
+                <View style={styles.filterRow}>
+                  {FILTERS.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.filterChip,
+                        {
+                          backgroundColor:
+                            activeFilter === option.value
+                              ? colors.primary
+                              : colors.backgroundSecondary,
+                          borderColor:
+                            activeFilter === option.value
+                              ? colors.primary
+                              : colors.border,
+                        },
+                      ]}
+                      onPress={() => setActiveFilter(option.value)}
+                    >
+                      <Text
+                        style={[
+                          styles.filterText,
+                          {
+                            color:
+                              activeFilter === option.value
+                                ? "#fff"
+                                : colors.textSecondary,
+                          },
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
 
-            <View style={styles.errandCardFooter}>
-              <View style={styles.statusRow}>
-                {getStatusIcon(item.status)}
+              <Text
+                style={[styles.resultsCount, { color: colors.textTertiary }]}
+              >
+                {errands.length} errand{errands.length !== 1 ? "s" : ""}
+              </Text>
+            </>
+          }
+          renderItem={({ item }: { item: any }) => (
+            <TouchableOpacity
+              style={[
+                styles.errandCard,
+                {
+                  backgroundColor: colors.backgroundSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+              activeOpacity={0.75}
+              onPress={() => setSelectedErrand(item)}
+            >
+              <View style={styles.errandCardHeader}>
+                <View style={styles.errandCardLeft}>
+                  <Avatar
+                    firstName={item.requester?.firstName ?? ""}
+                    lastName={item.requester?.lastName ?? ""}
+                    uri={item.requester?.avatarUrl ?? undefined}
+                    size={38}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[styles.errandTitle, { color: colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {item.title}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.errandMeta,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      {item.requester?.firstName} {item.requester?.lastName} ·{" "}
+                      {formatErrandType(item.type)}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={colors.textTertiary}
+                />
+              </View>
+
+              <View
+                style={[styles.divider, { backgroundColor: colors.border }]}
+              />
+
+              <View style={styles.errandCardFooter}>
+                <View style={styles.statusRow}>
+                  {getStatusIcon(item.status)}
+                  <Text
+                    style={[
+                      styles.statusText,
+                      { color: getStatusColor(item.status) },
+                    ]}
+                  >
+                    {formatErrandStatus(item.status)}
+                  </Text>
+                </View>
                 <Text
-                  style={[
-                    styles.statusText,
-                    { color: getStatusColor(item.status) },
-                  ]}
+                  style={[styles.errandDate, { color: colors.textTertiary }]}
                 >
-                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                  {new Date(
+                    item.completedAt ?? item.createdAt,
+                  ).toLocaleDateString()}
+                </Text>
+                <Text style={[styles.errandPrice, { color: colors.primary }]}>
+                  £{(item.agreedPrice ?? item.suggestedPrice ?? 0).toFixed(2)}
                 </Text>
               </View>
-              <Text style={[styles.errandDate, { color: colors.textTertiary }]}>
-                {item.date}
-              </Text>
-              <Text style={[styles.errandPrice, { color: colors.primary }]}>
-                {item.price}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>
-              No errands found
-            </Text>
-            <Text
-              style={[styles.emptySubtitle, { color: colors.textSecondary }]}
-            >
-              No errands match the selected filter
-            </Text>
-          </View>
-        }
-      />
+            </TouchableOpacity>
+          )}
+          ListEmptyComponent={
+            <EmptyState
+              containerStyle={{ marginHorizontal: 16, flex: 1 }}
+              message="No errands found"
+              icon="clipboard-outline"
+            />
+          }
+        />
+      )}
 
       {/* Detail Modal */}
       <Modal
@@ -363,24 +305,14 @@ const ErrandHistory = ({ onBack }: { onBack: () => void }) => {
           <SafeAreaView
             style={[styles.container, { backgroundColor: colors.background }]}
           >
-            <View
-              style={[
-                styles.header,
-                {
-                  borderBottomColor: colors.border,
-                  backgroundColor: colors.background,
-                },
-              ]}
-            >
-              <BackButton
-                noText
-                onBack={onBack}
-                icon={<ChevronLeft size={22} color={colors.text} />}
-              />
+            <View style={[styles.header, { borderBottomColor: colors.border }]}>
+              <TouchableOpacity onPress={() => setSelectedErrand(null)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
               <Text style={[styles.pageTitle, { color: colors.text }]}>
                 Errand Detail
               </Text>
-              <View style={{ width: 34 }} />
+              <View style={{ width: 40 }} />
             </View>
 
             <ScrollView contentContainerStyle={styles.modalContent}>
@@ -402,8 +334,7 @@ const ErrandHistory = ({ onBack }: { onBack: () => void }) => {
                     { color: getStatusColor(selectedErrand.status) },
                   ]}
                 >
-                  {selectedErrand.status.charAt(0).toUpperCase() +
-                    selectedErrand.status.slice(1)}
+                  {formatErrandStatus(selectedErrand.status)}
                 </Text>
               </View>
 
@@ -420,13 +351,26 @@ const ErrandHistory = ({ onBack }: { onBack: () => void }) => {
                 >
                   {[
                     { label: "Task", value: selectedErrand.title },
-                    { label: "Date", value: selectedErrand.date },
-                    { label: "Distance", value: selectedErrand.distance },
+                    {
+                      label: "Type",
+                      value: formatErrandType(selectedErrand.type),
+                    },
+                    { label: "Pickup", value: selectedErrand.pickupLocation },
+                    { label: "Dropoff", value: selectedErrand.dropoffLocation },
                     {
                       label: "Requester",
-                      value: `${selectedErrand.requester.firstName} ${selectedErrand.requester.lastName}`,
+                      value: `${selectedErrand.requester?.firstName} ${selectedErrand.requester?.lastName}`,
                     },
-                    { label: "Earned", value: selectedErrand.price },
+                    {
+                      label: "Date",
+                      value: new Date(
+                        selectedErrand.completedAt ?? selectedErrand.createdAt,
+                      ).toLocaleDateString(),
+                    },
+                    {
+                      label: "Earned",
+                      value: `£${(selectedErrand.agreedPrice ?? selectedErrand.suggestedPrice ?? 0).toFixed(2)}`,
+                    },
                   ].map((row, index, arr) => (
                     <View key={row.label}>
                       <View style={styles.detailRow}>
@@ -474,12 +418,10 @@ const ErrandHistory = ({ onBack }: { onBack: () => void }) => {
   );
 };
 
-export default ErrandHistory;
+export default HelperErrandHistory;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -488,36 +430,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
-  pageTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  listContent: {
-    paddingBottom: 40,
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    gap: 12,
-  },
-  cardsRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  card: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    gap: 6,
-  },
-  cardValue: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  cardTitle: {
-    fontSize: 11,
-  },
+  pageTitle: { fontSize: 20, fontWeight: "700" },
+  listContent: { flex: 1 },
+  section: { paddingHorizontal: 16, paddingTop: 20, gap: 12 },
+  cardsRow: { flexDirection: "row", gap: 10 },
+  card: { flex: 1, padding: 12, borderRadius: 10, borderWidth: 1, gap: 6 },
+  cardValue: { fontSize: 18, fontWeight: "700" },
+  cardLabel: { fontSize: 11 },
   filterSection: {
     flexDirection: "row",
     alignItems: "center",
@@ -525,20 +444,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 20,
   },
-  filterRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  filterOption: {
+  filterRow: { flexDirection: "row", gap: 8 },
+  filterChip: {
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
   },
-  filterOptionText: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
+  filterText: { fontSize: 13, fontWeight: "500" },
   resultsCount: {
     fontSize: 12,
     paddingHorizontal: 16,
@@ -564,53 +477,19 @@ const styles = StyleSheet.create({
     gap: 10,
     flex: 1,
   },
-  errandTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  errandRequester: {
-    fontSize: 12,
-  },
-  divider: {
-    height: 1,
-  },
+  errandTitle: { fontSize: 14, fontWeight: "600", marginBottom: 2 },
+  errandMeta: { fontSize: 12 },
+  divider: { height: 1 },
   errandCardFooter: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  errandDate: {
-    fontSize: 12,
-  },
-  errandPrice: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingTop: 60,
-    gap: 8,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  emptySubtitle: {
-    fontSize: 14,
-  },
-  modalContent: {
-    paddingBottom: 40,
-  },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  statusText: { fontSize: 12, fontWeight: "600" },
+  errandDate: { fontSize: 12 },
+  errandPrice: { fontSize: 14, fontWeight: "700" },
+  modalContent: { paddingBottom: 40 },
   statusBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -621,19 +500,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
   },
-  statusBannerText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  detailSection: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  detailCard: {
-    borderRadius: 10,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
+  statusBannerText: { fontSize: 14, fontWeight: "600" },
+  detailSection: { paddingHorizontal: 16, paddingTop: 16 },
+  detailCard: { borderRadius: 10, borderWidth: 1, overflow: "hidden" },
   detailRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -641,10 +510,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
-  detailLabel: {
-    fontSize: 14,
-  },
-  detailValue: {
-    fontSize: 14,
-  },
+  detailLabel: { fontSize: 14 },
+  detailValue: { fontSize: 14 },
 });

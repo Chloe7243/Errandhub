@@ -1,11 +1,13 @@
 import Avatar from "@/components/avatar";
+import EmptyState from "@/components/empty-state";
 import ExpandableSection from "@/components/ui/expandable-section";
 import Input from "@/components/ui/input";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { useAppDispatch } from "@/store/hooks";
+import { useGetUserDetailsQuery } from "@/store/api/user";
 import { logoutUser } from "@/store/slices";
-import { User } from "@/types/user";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import {
@@ -25,7 +27,14 @@ const Profile = () => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const [expanded, setExpanded] = useState<Section>(null);
-  const user = useAppSelector((state) => state.auth.user) as User;
+
+  const {
+    currentData: data,
+    isLoading,
+    isError,
+  } = useGetUserDetailsQuery(null);
+
+  const user = data?.user;
 
   const toggle = (section: Section) => {
     setExpanded((prev) => (prev === section ? null : section));
@@ -42,6 +51,10 @@ const Profile = () => {
     ]);
   };
 
+  if (isLoading) return <LoadingSpinner fullScreen />;
+  if (isError || !user)
+    return <EmptyState fullScreen isError message="Failed to load profile" />;
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -53,19 +66,34 @@ const Profile = () => {
         {/* Avatar + Name */}
         <View style={styles.hero}>
           <Avatar
-            firstName={user?.firstName}
-            lastName={user?.lastName}
+            firstName={user.firstName}
+            lastName={user.lastName}
+            uri={user.avatarUrl ?? undefined}
             size={80}
           />
           <Text style={[styles.name, { color: colors.text }]}>
-            {user?.firstName} {user?.lastName}
+            {user.firstName} {user.lastName}
           </Text>
-          <Text style={[styles.university, { color: colors.primary }]}>
-            {/* {user?.university} */}
-          </Text>
+          {user.university && (
+            <Text style={[styles.university, { color: colors.primary }]}>
+              {user.university}
+            </Text>
+          )}
           <Text style={[styles.member, { color: colors.textTertiary }]}>
-            {/* Member since {new Date(user.createdAt).toLocaleDateString()} */}
+            Member since {new Date(user.createdAt).toLocaleDateString()}
           </Text>
+          {user.isVerified && (
+            <View style={styles.verifiedRow}>
+              <Ionicons
+                name="checkmark-circle"
+                size={16}
+                color={colors.success}
+              />
+              <Text style={[styles.verifiedText, { color: colors.success }]}>
+                Verified
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Settings */}
@@ -84,24 +112,34 @@ const Profile = () => {
             <Input
               label="First Name"
               placeholder="First name"
-              value=""
+              value={user.firstName}
               onChangeText={() => {}}
               onBlur={() => {}}
             />
             <Input
               label="Last Name"
               placeholder="Last name"
-              value=""
+              value={user.lastName}
               onChangeText={() => {}}
               onBlur={() => {}}
             />
             <Input
               label="Phone Number"
               placeholder="Phone number"
-              value=""
+              value={user.phone}
               onChangeText={() => {}}
               onBlur={() => {}}
+              keyboardType="phone-pad"
             />
+            {user.university && (
+              <Input
+                label="University"
+                placeholder="University"
+                value={user.university}
+                onChangeText={() => {}}
+                onBlur={() => {}}
+              />
+            )}
             <TouchableOpacity
               style={[styles.saveButton, { backgroundColor: colors.primary }]}
             >
@@ -200,15 +238,15 @@ const styles = StyleSheet.create({
   name: { fontSize: 22, fontWeight: "700" },
   university: { fontSize: 15, fontWeight: "500" },
   member: { fontSize: 13 },
+  verifiedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  verifiedText: { fontSize: 13, fontWeight: "500" },
   sectionTitle: { fontSize: 18, fontWeight: "700" },
   settings: { gap: 10 },
-  panel: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 16,
-    gap: 12,
-    marginTop: -4,
-  },
   saveButton: {
     paddingVertical: 12,
     borderRadius: 10,

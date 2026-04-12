@@ -1,34 +1,32 @@
 import Avatar from "@/components/avatar";
 import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { formatErrandStatus, formatErrandType } from "@/utils/errand";
+import { ErrandStatus, ErrandType } from "@errandhub/shared";
 import { Entypo, Ionicons } from "@expo/vector-icons";
-import {
-  useColorScheme,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-
-type ErrandStatus = "new" | "active" | "completed" | "cancelled";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 type Props = {
-  type: "Quick" | "Standard" | "Complex";
+  type: ErrandType;
   status: ErrandStatus;
   title: string;
   location: string;
-  amount: string;
+  amount?: number | null;
   time: string;
-  helperFirstName?: string;
-  helperLastName?: string;
-  helperAvatar?: string;
+  helperFirstName?: string | null;
+  helperLastName?: string | null;
+  helperAvatar?: string | null;
   onPress?: () => void;
 };
 
 const statusColors: Record<ErrandStatus, string> = {
-  new: "#F59E0B",
-  active: "#3B82F6",
-  completed: "#10B981",
-  cancelled: "#EF4444",
+  POSTED: "#F59E0B",
+  ACCEPTED: "#3B82F6",
+  IN_PROGRESS: "#6366F1",
+  REVIEWING: "#8B5CF6",
+  COMPLETED: "#10B981",
+  CANCELLED: "#EF4444",
+  DISPUTED: "#EF4444",
 };
 
 const ErrandCard = ({
@@ -46,15 +44,18 @@ const ErrandCard = ({
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const statusColor = statusColors[status];
+  const hasHelper = !!helperFirstName;
+  const isTerminal = status === "CANCELLED" || status === "DISPUTED";
 
   return (
     <TouchableOpacity
       onPress={onPress}
+      activeOpacity={0.8}
       style={[
         styles.card,
         {
-          backgroundColor: colors.backgroundSecondary,
-          borderColor: colors.border,
+          backgroundColor: colors.surface,
+          borderColor: isTerminal ? statusColor + "40" : colors.border,
         },
       ]}
     >
@@ -64,31 +65,49 @@ const ErrandCard = ({
           <Text
             style={[
               styles.badge,
-              { backgroundColor: colors.background, color: colors.text },
+              {
+                backgroundColor: colors.backgroundSecondary,
+                color: colors.textSecondary,
+              },
             ]}
           >
-            {type}
+            {formatErrandType(type)}
           </Text>
           <View style={styles.statusRow}>
             <Entypo name="dot-single" size={20} color={statusColor} />
             <Text style={[styles.statusText, { color: statusColor }]}>
-              {status.charAt(0).toUpperCase() + status.slice(1)}
+              {formatErrandStatus(status)}
             </Text>
           </View>
         </View>
-        <Text style={[styles.amount, { color: colors.primary }]}>{amount}</Text>
+
+        {/* Amount — show agreed or pending */}
+        {amount ? (
+          <Text style={[styles.amount, { color: colors.primary }]}>
+            £{amount?.toFixed(2)}
+          </Text>
+        ) : (
+          <Text style={[styles.amountPending, { color: colors.textTertiary }]}>
+            Awaiting bids
+          </Text>
+        )}
       </View>
 
       {/* Title + location */}
-      <View>
-        <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+      <View style={{ gap: 4 }}>
+        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+          {title}
+        </Text>
         <View style={styles.locationRow}>
           <Ionicons
             name="location-outline"
             size={12}
             color={colors.textSecondary}
           />
-          <Text style={[styles.location, { color: colors.textSecondary }]}>
+          <Text
+            style={[styles.location, { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
             {location}
           </Text>
         </View>
@@ -99,16 +118,34 @@ const ErrandCard = ({
 
       {/* Footer */}
       <View style={styles.footer}>
-        {helperFirstName ? (
-          <Avatar
-            firstName={helperFirstName}
-            lastName={helperLastName}
-            uri={helperAvatar}
-            size={32}
-          />
+        {/* Helper info or waiting state */}
+        {hasHelper ? (
+          <View style={styles.helperRow}>
+            <Avatar
+              firstName={helperFirstName}
+              lastName={helperLastName ?? ""}
+              uri={helperAvatar ?? undefined}
+              size={28}
+            />
+            <Text style={[styles.helperName, { color: colors.textSecondary }]}>
+              {helperFirstName} {helperLastName}
+            </Text>
+          </View>
         ) : (
-          <View />
+          <View style={styles.helperRow}>
+            <Ionicons
+              name="person-outline"
+              size={14}
+              color={colors.textTertiary}
+            />
+            <Text style={[styles.noHelper, { color: colors.textTertiary }]}>
+              {status === "POSTED"
+                ? "Waiting for helpers"
+                : "No helper assigned"}
+            </Text>
+          </View>
         )}
+
         <View style={styles.timeRow}>
           <Ionicons name="time-outline" size={12} color={colors.textTertiary} />
           <Text style={[styles.time, { color: colors.textTertiary }]}>
@@ -138,12 +175,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+    flex: 1,
   },
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "500",
   },
   statusRow: {
@@ -158,10 +196,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
   },
+  amountPending: {
+    fontSize: 12,
+    fontStyle: "italic",
+  },
   title: {
     fontSize: 16,
     fontWeight: "700",
-    marginBottom: 4,
   },
   locationRow: {
     flexDirection: "row",
@@ -170,21 +211,30 @@ const styles = StyleSheet.create({
   },
   location: {
     fontSize: 13,
+    flex: 1,
   },
-  divider: {
-    height: 1,
-  },
+  divider: { height: 1 },
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  helperRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  helperName: {
+    fontSize: 13,
+  },
+  noHelper: {
+    fontSize: 12,
+    fontStyle: "italic",
   },
   timeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
   },
-  time: {
-    fontSize: 12,
-  },
+  time: { fontSize: 12 },
 });

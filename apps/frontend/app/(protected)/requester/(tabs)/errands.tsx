@@ -1,6 +1,10 @@
 import ErrandCard from "@/components/errand-card";
+import EmptyState from "@/components/empty-state";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useGetRequestedErrandsQuery } from "@/store/api/user";
+import { ErrandStatus } from "@errandhub/shared";
+import { formatErrandStatus } from "@/utils/errand";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -13,71 +17,40 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 
-type Filter = "all" | "active" | "completed" | "cancelled";
+type Filter = "ALL" | ErrandStatus;
 
-const MOCK_ERRANDS = [
-  {
-    id: "1",
-    type: "Standard" as const,
-    status: "completed" as const,
-    title: "Buy Groceries",
-    location: "Whole Foods • Delivered",
-    amount: "£35.00",
-    time: "Yesterday",
-    helperFirstName: "Mike",
-    helperLastName: "T",
-  },
-  {
-    id: "2",
-    type: "Quick" as const,
-    status: "cancelled" as const,
-    title: "Pick Up Laundry",
-    location: "Campus Laundry",
-    amount: "£15.00",
-    time: "3 days ago",
-  },
-  {
-    id: "3",
-    type: "Quick" as const,
-    status: "completed" as const,
-    title: "Drop Parcel at Post Office",
-    location: "USPS Main St",
-    amount: "£12.50",
-    time: "4 days ago",
-    helperFirstName: "Sarah",
-    helperLastName: "K",
-  },
-  {
-    id: "4",
-    type: "Complex" as const,
-    status: "active" as const,
-    title: "Pick Up Prescription",
-    location: "Campus Pharmacy",
-    amount: "£20.00",
-    time: "Just now",
-    helperFirstName: "James",
-    helperLastName: "L",
-  },
+const filters: Filter[] = [
+  "ALL",
+  "POSTED",
+  "ACCEPTED",
+  "IN_PROGRESS",
+  "REVIEWING",
+  "COMPLETED",
+  "CANCELLED",
+  "DISPUTED",
 ];
-
-const filters: Filter[] = ["all", "active", "completed", "cancelled"];
 
 const ErrandHistory = () => {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const colors = Colors[colorScheme ?? "dark"];
-  const [activeFilter, setActiveFilter] = useState<Filter>("all");
+  const [activeFilter, setActiveFilter] = useState<Filter>("ALL");
   const [search, setSearch] = useState("");
 
-  const filtered = MOCK_ERRANDS.filter((errand) => {
-    const matchesFilter =
-      activeFilter === "all" || errand.status === activeFilter;
-    const matchesSearch = errand.title
-      .toLowerCase()
-      .includes(search.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  const {
+    currentData: data,
+    isLoading,
+    isError,
+  } = useGetRequestedErrandsQuery(
+    activeFilter === "ALL" ? {} : { status: [activeFilter] },
+    { refetchOnMountOrArgChange: true },
+  );
+
+  const filtered = data?.errands.filter((errand: any) =>
+    errand.title.toLowerCase().includes(search.toLowerCase()),
+  );
 
   return (
     <SafeAreaView
@@ -102,27 +75,40 @@ const ErrandHistory = () => {
             color={colors.textTertiary}
           />
           <TextInput
-            placeholder="Search tasks..."
+            placeholder="Search errands..."
             placeholderTextColor={colors.textTertiary}
             value={search}
             onChangeText={setSearch}
             style={[styles.searchInput, { color: colors.text }]}
           />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <Ionicons
+                name="close-circle"
+                size={18}
+                color={colors.textTertiary}
+              />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Filters */}
-        <View style={styles.filters}>
-          {filters.map((filter) => (
+        <FlatList
+          data={filters}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(item) => item}
+          contentContainerStyle={{ gap: 8 }}
+          renderItem={({ item }) => (
             <TouchableOpacity
-              key={filter}
-              onPress={() => setActiveFilter(filter)}
+              onPress={() => setActiveFilter(item)}
               style={[
                 styles.filterChip,
                 {
                   backgroundColor:
-                    activeFilter === filter ? colors.primary : colors.surface,
+                    activeFilter === item ? colors.primary : colors.surface,
                   borderColor:
-                    activeFilter === filter ? colors.primary : colors.border,
+                    activeFilter === item ? colors.primary : colors.border,
                 },
               ]}
             >
@@ -131,49 +117,54 @@ const ErrandHistory = () => {
                   styles.filterText,
                   {
                     color:
-                      activeFilter === filter ? "#fff" : colors.textSecondary,
+                      activeFilter === item ? "#fff" : colors.textSecondary,
                   },
                 ]}
               >
-                {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                {item === "ALL" ? "All" : formatErrandStatus(item)}
               </Text>
             </TouchableOpacity>
-          ))}
-        </View>
+          )}
+        />
       </View>
 
       {/* List */}
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <ErrandCard
-            type={item.type}
-            status={item.status}
-            title={item.title}
-            location={item.location}
-            amount={item.amount}
-            time={item.time}
-            onPress={() => router.push("/requester/errand-details")}
-            helperFirstName={item.helperFirstName}
-            helperLastName={item.helperLastName}
-          />
-        )}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons
-              name="clipboard-outline"
-              size={48}
-              color={colors.textTertiary}
+      {isLoading ? (
+        <LoadingSpinner fullScreen customSize={1.5} color="#fff" />
+      ) : isError ? (
+        <EmptyState fullScreen isError message="Failed to load errands" />
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item: any) => item.id}
+          contentContainerStyle={[styles.list]}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }: { item: any }) => (
+            <ErrandCard
+              type={item.type}
+              status={item.status}
+              title={item.title}
+              location={item.pickupLocation}
+              amount={item.agreedPrice ?? item.suggestedPrice}
+              time={new Date(item.createdAt).toLocaleDateString()}
+              onPress={() =>
+                router.push(`/requester/errand-details?id=${item.id}`)
+              }
+              helperFirstName={item.helper?.firstName}
+              helperLastName={item.helper?.lastName}
+              helperAvatar={item.helper?.avatarUrl}
             />
-            <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
-              No errands found
-            </Text>
-          </View>
-        }
-      />
+          )}
+          ListEmptyComponent={
+            <EmptyState
+              containerStyle={{ flex: 1 }}
+              fullScreen
+              message="No errands found"
+              icon="clipboard-outline"
+            />
+          }
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -188,10 +179,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     gap: 16,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
+  title: { fontSize: 20, fontWeight: "700" },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -201,35 +189,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-  },
-  filters: {
-    flexDirection: "row",
-    gap: 8,
-  },
+  searchInput: { flex: 1, fontSize: 15 },
   filterChip: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
   },
-  filterText: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
+  filterText: { fontSize: 13, fontWeight: "500" },
   list: {
+    flex: 1,
     paddingHorizontal: 20,
     paddingBottom: 24,
     gap: 16,
-  },
-  empty: {
-    alignItems: "center",
-    paddingTop: 80,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 15,
   },
 });

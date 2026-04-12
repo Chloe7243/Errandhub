@@ -35,11 +35,11 @@ enum ErrandType {
   SHOPPING
 }
 
-enum Complexity {
-  QUICK
-  STANDARD
-  COMPLEX
-}
+// enum Complexity {
+//   QUICK
+//   STANDARD
+//   COMPLEX
+// }
 
 enum DisputeStatus {
   OPEN
@@ -48,26 +48,63 @@ enum DisputeStatus {
   CLOSED
 }
 
+enum BidStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 model User {
-  id                String    @id @default(cuid())
-  email             String    @unique
+  id                String          @id @default(cuid())
+  email             String          @unique
   firstName         String
   lastName          String
   phone             String
   passwordHash      String
   avatarUrl         String?
-  isVerified        Boolean   @default(false)
+  isVerified        Boolean         @default(false)
   stripeAccountId   String?
   university        String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
   resetToken        String?
   verificationToken String?
   resetTokenExpiry  DateTime?
-  requestedErrands  Errand[]  @relation("RequesterErrands")
-  helpingErrands    Errand[]  @relation("HelperErrands")
-  messages          Message[] @relation("UserMessages")
-  raisedDisputes    Dispute[] @relation("RaisedDisputes")
+  paymentMethods    PaymentMethod[] @relation("UserPaymentMethods")
+  requestedErrands  Errand[]        @relation("RequesterErrands")
+  helpingErrands    Errand[]        @relation("HelperErrands")
+  messages          Message[]       @relation("UserMessages")
+  raisedDisputes    Dispute[]       @relation("RaisedDisputes")
+  errandBids        ErrandBid[]     @relation("HelperBids")
+  userSettings      UserSettings[]
+}
+
+model PaymentMethod {
+  id                    String   @id @default(cuid())
+  userId                String
+  stripePaymentMethodId String
+  last4                 String
+  brand                 String
+  expMonth              Int
+  expYear               Int
+  isDefault             Boolean  @default(false)
+  createdAt             DateTime @default(now())
+
+  user User @relation("UserPaymentMethods", fields: [userId], references: [id])
+}
+
+model UserSettings {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  isAvailable        Boolean  @default(false)
+  notificationRadius Float    @default(2.0)
+  errandUpdates      Boolean  @default(true)
+  newMessages        Boolean  @default(true)
+  promotions         Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
 }
 
 model Errand {
@@ -78,7 +115,9 @@ model Errand {
   description     String
   pickupLocation  String
   dropoffLocation String
-  helperPayment   Float
+  pickupReference String?
+  suggestedPrice  Float?
+  agreedPrice     Float?
   status          ErrandStatus @default(POSTED)
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -86,13 +125,26 @@ model Errand {
   proofNote       String?
   completedAt     DateTime?
   type            ErrandType
-  complexity      Complexity
+  // complexity      Complexity
 
   payment   PaymentTransaction? @relation("ErrandPayment")
   messages  Message[]           @relation("ErrandMessages")
   helper    User?               @relation("HelperErrands", fields: [helperId], references: [id])
   requester User                @relation("RequesterErrands", fields: [requesterId], references: [id])
   dispute   Dispute?
+  bids      ErrandBid[]
+}
+
+model ErrandBid {
+  id        String    @id @default(cuid())
+  errandId  String
+  helperId  String
+  amount    Float
+  status    BidStatus @default(PENDING)
+  createdAt DateTime  @default(now())
+
+  errand Errand @relation(fields: [errandId], references: [id])
+  helper User   @relation("HelperBids", fields: [helperId], references: [id])
 }
 
 model Message {

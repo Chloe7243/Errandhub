@@ -1,12 +1,16 @@
 import Avatar from "@/components/avatar";
 import ExpandableSection from "@/components/ui/expandable-section";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  useGetSettingsQuery,
+  useUpdateSettingsMutation,
+} from "@/store/api/user";
 import { logoutUser } from "@/store/slices";
-import { User } from "@/types";
 import { Ionicons } from "@expo/vector-icons";
-import { Bell, ChevronRight, LogOut, MapPin, Save } from "lucide-react-native";
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   ScrollView,
@@ -14,31 +18,91 @@ import {
   Switch,
   Text,
   TouchableOpacity,
-  useColorScheme,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
+import { displayErrorMessage } from "@/utils/errors";
+import { User } from "@/types";
+import AvailabilityToggle from "@/components/availability-toggle";
 
 type RadiusOption = 0.5 | 1 | 2 | 5;
-
 const RADIUS_OPTIONS: RadiusOption[] = [0.5, 1, 2, 5];
+
+type Settings = {
+  isAvailable: boolean;
+  notificationRadius: RadiusOption;
+  errandUpdates: boolean;
+  newMessages: boolean;
+  promotions: boolean;
+};
+
+const DEFAULT_SETTINGS: Settings = {
+  isAvailable: false,
+  notificationRadius: 2,
+  errandUpdates: true,
+  newMessages: true,
+  promotions: false,
+};
 
 const HelperSettings = () => {
   const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
-
   const user = useAppSelector((state) => state.auth.user) as User;
-  const [isExpanded, setIsExpanded] = useState<boolean>(false);
-  const [isAvailable, setIsAvailable] = useState<boolean>(true);
-  const [selectedRadius, setSelectedRadius] = useState<RadiusOption>(0.5);
 
-  const handleSave = (): void => {
-    // persist settings
-    console.log("Saving settings", { isAvailable, selectedRadius });
+  const [isPaymentExpanded, setIsPaymentExpanded] = useState(false);
+  const [isNotifExpanded, setIsNotifExpanded] = useState(false);
+  const [savedSettings, setSavedSettings] =
+    useState<Settings>(DEFAULT_SETTINGS);
+  const [currentSettings, setCurrentSettings] =
+    useState<Settings>(DEFAULT_SETTINGS);
+
+  const {
+    currentData: settingsData,
+    isLoading,
+    error,
+  } = useGetSettingsQuery(null);
+  const [updateSettings, { isLoading: isSaving }] = useUpdateSettingsMutation();
+
+  useEffect(() => {
+    if (settingsData?.settings) {
+      const loaded: Settings = {
+        isAvailable: settingsData.settings.isAvailable,
+        notificationRadius: settingsData.settings
+          .notificationRadius as RadiusOption,
+        errandUpdates: settingsData.settings.errandUpdates,
+        newMessages: settingsData.settings.newMessages,
+        promotions: settingsData.settings.promotions,
+      };
+      setSavedSettings(loaded);
+      setCurrentSettings(loaded);
+    }
+  }, [settingsData]);
+
+  console.log({ settingsData, error });
+
+  const hasChanges =
+    JSON.stringify(savedSettings) !== JSON.stringify(currentSettings);
+
+  const updateSetting = <K extends keyof Settings>(
+    key: K,
+    value: Settings[K],
+  ) => {
+    setCurrentSettings((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleLogout = (): void => {
+  const handleSave = async () => {
+    try {
+      await updateSettings(currentSettings).unwrap();
+      setSavedSettings(currentSettings);
+      Toast.show({ type: "success", text1: "Settings saved" });
+    } catch (err) {
+      displayErrorMessage(err);
+    }
+  };
+
+  const handleLogout = () => {
     Alert.alert("Log Out", "Are you sure you want to log out?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -53,266 +117,304 @@ const HelperSettings = () => {
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View
-          style={[
-            styles.header,
-            {
-              borderBottomColor: colors.border,
-              backgroundColor: colors.background,
-            },
-          ]}
-        >
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            Settings
-          </Text>
-        </View>
-
-        {/* Profile Card */}
-        <View style={styles.section}>
-          <View
-            style={[
-              styles.profileCard,
-              {
-                backgroundColor: colors.backgroundSecondary,
-                borderColor: colors.border,
-              },
-            ]}
+      {isLoading ? (
+        <LoadingSpinner fullScreen />
+      ) : (
+        <>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: hasChanges ? 100 : 40 }}
           >
-            <Avatar
-              firstName={user?.firstName}
-              lastName={user?.lastName}
-              size={56}
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.profileName, { color: colors.text }]}>
-                {user?.firstName} {user?.lastName}
+            {/* Header */}
+            <View style={[styles.header, { borderBottomColor: colors.border }]}>
+              <Text style={[styles.headerTitle, { color: colors.text }]}>
+                Settings
               </Text>
-              <View style={styles.profileMeta}>
-                <Text
-                  style={[
-                    styles.profileRating,
-                    { color: colors.textSecondary },
-                  ]}
-                >
-                  ⭐ 4.8
-                </Text>
-                <Text
-                  style={[styles.profileDot, { color: colors.textTertiary }]}
-                >
-                  ·
-                </Text>
-                <Text
-                  style={[
-                    styles.profileEarnings,
-                    { color: colors.textSecondary },
-                  ]}
-                >
-                  Total earned:{" "}
-                  <Text
-                    style={[styles.earningsValue, { color: colors.success }]}
-                  >
-                    £127.50
-                  </Text>
-                </Text>
-              </View>
             </View>
-          </View>
-        </View>
 
-        {/* Availability */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Availability
-          </Text>
-          <View
-            style={[
-              styles.settingRow,
-              {
-                backgroundColor: colors.backgroundSecondary,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <View style={styles.settingRowLeft}>
+            {/* Profile Card */}
+            <View style={styles.section}>
               <View
                 style={[
-                  styles.settingIconWrapper,
-                  { backgroundColor: colors.success + "15" },
-                ]}
-              >
-                <Bell size={16} color={colors.success} />
-              </View>
-              <View>
-                <Text style={[styles.settingLabel, { color: colors.text }]}>
-                  Available for tasks
-                </Text>
-                <Text
-                  style={[
-                    styles.settingSubLabel,
-                    { color: colors.textSecondary },
-                  ]}
-                >
-                  {isAvailable
-                    ? "You are visible to requesters"
-                    : "You are hidden from requesters"}
-                </Text>
-              </View>
-            </View>
-            <Switch
-              value={isAvailable}
-              onValueChange={setIsAvailable}
-              trackColor={{ false: colors.border, true: colors.success }}
-              thumbColor="#fff"
-            />
-          </View>
-        </View>
-
-        {/* Notification Radius */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Notification Radius
-          </Text>
-          <Text style={[styles.sectionSub, { color: colors.textSecondary }]}>
-            Only receive tasks within this distance from you
-          </Text>
-          <View style={styles.radiusRow}>
-            {RADIUS_OPTIONS.map((radius) => (
-              <TouchableOpacity
-                key={radius}
-                style={[
-                  styles.radiusOption,
+                  styles.profileCard,
                   {
-                    backgroundColor:
-                      selectedRadius === radius
-                        ? colors.primary
-                        : colors.backgroundSecondary,
-                    borderColor:
-                      selectedRadius === radius
-                        ? colors.primary
-                        : colors.border,
+                    backgroundColor: colors.backgroundSecondary,
+                    borderColor: colors.border,
                   },
                 ]}
-                onPress={() => setSelectedRadius(radius)}
-                activeOpacity={0.7}
               >
-                <MapPin
-                  size={12}
-                  color={
-                    selectedRadius === radius ? "#fff" : colors.textSecondary
-                  }
+                <Avatar
+                  firstName={user?.firstName ?? ""}
+                  lastName={user?.lastName ?? ""}
+                  size={56}
                 />
-                <Text
-                  style={[
-                    styles.radiusText,
-                    {
-                      color:
-                        selectedRadius === radius
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.profileName, { color: colors.text }]}>
+                    {user?.firstName} {user?.lastName}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.profileEmail,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {user?.email}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Availability */}
+            <View style={styles.section}>
+              <AvailabilityToggle
+                controlled
+                value={currentSettings.isAvailable}
+                onChange={(val) => updateSetting("isAvailable", val)}
+              />
+            </View>
+
+            {/* Notification Radius */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Notification Radius
+              </Text>
+              <Text
+                style={[styles.sectionSub, { color: colors.textSecondary }]}
+              >
+                Only receive tasks within this distance from you
+              </Text>
+              <View style={styles.radiusRow}>
+                {RADIUS_OPTIONS.map((radius) => (
+                  <TouchableOpacity
+                    key={radius}
+                    style={[
+                      styles.radiusOption,
+                      {
+                        backgroundColor:
+                          currentSettings.notificationRadius === radius
+                            ? colors.primary
+                            : colors.backgroundSecondary,
+                        borderColor:
+                          currentSettings.notificationRadius === radius
+                            ? colors.primary
+                            : colors.border,
+                      },
+                    ]}
+                    onPress={() => updateSetting("notificationRadius", radius)}
+                  >
+                    <Ionicons
+                      name="location-outline"
+                      size={12}
+                      color={
+                        currentSettings.notificationRadius === radius
                           ? "#fff"
-                          : colors.textSecondary,
+                          : colors.textSecondary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.radiusText,
+                        {
+                          color:
+                            currentSettings.notificationRadius === radius
+                              ? "#fff"
+                              : colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      {radius}km
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Notifications */}
+            <ExpandableSection
+              icon="notifications-outline"
+              label="Notifications"
+              expanded={isNotifExpanded}
+              containerStyle={{ paddingHorizontal: 14, paddingTop: 18 }}
+              onPress={() => setIsNotifExpanded((prev) => !prev)}
+            >
+              {[
+                {
+                  key: "errandUpdates",
+                  label: "Errand updates",
+                  sub: "Get notified on errand status changes",
+                },
+                {
+                  key: "newMessages",
+                  label: "New messages",
+                  sub: "Get notified when you receive a message",
+                },
+                {
+                  key: "promotions",
+                  label: "Promotions",
+                  sub: "Offers and platform updates",
+                },
+              ].map((item) => (
+                <View
+                  key={item.key}
+                  style={[
+                    styles.settingRow,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.border,
                     },
                   ]}
                 >
-                  {radius}km
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+                  <View style={styles.settingRowLeft}>
+                    <View>
+                      <Text
+                        style={[styles.settingLabel, { color: colors.text }]}
+                      >
+                        {item.label}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.settingSubLabel,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        {item.sub}
+                      </Text>
+                    </View>
+                  </View>
+                  <Switch
+                    value={
+                      currentSettings[item.key as keyof Settings] as boolean
+                    }
+                    onValueChange={(val) =>
+                      updateSetting(item.key as keyof Settings, val)
+                    }
+                    trackColor={{ false: colors.border, true: colors.primary }}
+                    thumbColor="#fff"
+                  />
+                </View>
+              ))}
+            </ExpandableSection>
 
-        {/* Payment Methods */}
-        <ExpandableSection
-          icon="card-outline"
-          label="Payment Methods"
-          expanded={isExpanded}
-          containerStyle={{ paddingHorizontal: 14, paddingTop: 18 }}
-          onPress={() => setIsExpanded((prev) => !prev)}
-        >
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: colors.backgroundSecondary,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Ionicons
-              name="card-outline"
-              size={20}
-              color={colors.textSecondary}
-            />
-            <Text style={[styles.cardText, { color: colors.text }]}>
-              •••• •••• •••• 4242
-            </Text>
-            <Text style={[styles.cardBadge, { color: colors.primary }]}>
-              Default
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={[
-              styles.saveButton,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                borderWidth: 1,
-              },
-            ]}
-          >
-            <Ionicons name="add" size={18} color={colors.text} />
-            <Text style={[styles.saveText, { color: colors.text }]}>
-              Add Payment Method
-            </Text>
-          </TouchableOpacity>
-        </ExpandableSection>
-
-        {/* Actions */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Account
-          </Text>
-
-          <TouchableOpacity
-            style={[
-              styles.actionRow,
-              {
-                backgroundColor: colors.backgroundSecondary,
-                borderColor: colors.border,
-              },
-            ]}
-            activeOpacity={0.7}
-            onPress={handleLogout}
-          >
-            <View style={styles.settingRowLeft}>
+            {/* Payment Methods */}
+            <ExpandableSection
+              icon="card-outline"
+              label="Payment Methods"
+              expanded={isPaymentExpanded}
+              containerStyle={{ paddingHorizontal: 14, paddingTop: 18 }}
+              onPress={() => setIsPaymentExpanded((prev) => !prev)}
+            >
               <View
                 style={[
-                  styles.settingIconWrapper,
-                  { backgroundColor: colors.error + "15" },
+                  styles.card,
+                  {
+                    backgroundColor: colors.backgroundSecondary,
+                    borderColor: colors.border,
+                  },
                 ]}
               >
-                <LogOut size={16} color={colors.error} />
+                <Ionicons
+                  name="card-outline"
+                  size={20}
+                  color={colors.textSecondary}
+                />
+                <Text style={[styles.cardText, { color: colors.text }]}>
+                  •••• •••• •••• 4242
+                </Text>
+                <Text style={[styles.cardBadge, { color: colors.primary }]}>
+                  Default
+                </Text>
               </View>
-              <Text style={[styles.settingLabel, { color: colors.error }]}>
-                Log Out
-              </Text>
-            </View>
-            <ChevronRight size={18} color={colors.textTertiary} />
-          </TouchableOpacity>
-        </View>
+              <TouchableOpacity
+                style={[
+                  styles.addButton,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Ionicons name="add" size={18} color={colors.text} />
+                <Text style={[styles.addButtonText, { color: colors.text }]}>
+                  Add Payment Method
+                </Text>
+              </TouchableOpacity>
+            </ExpandableSection>
 
-        {/* Save Button */}
-        <View style={styles.saveSection}>
-          <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: colors.primary }]}
-            activeOpacity={0.8}
-            onPress={handleSave}
-          >
-            <Save size={18} color="#fff" />
-            <Text style={styles.saveBtnText}>Save Settings</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+            {/* Account */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Account
+              </Text>
+              <TouchableOpacity
+                style={[
+                  styles.settingRow,
+                  {
+                    backgroundColor: colors.backgroundSecondary,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={handleLogout}
+              >
+                <View style={styles.settingRowLeft}>
+                  <View
+                    style={[
+                      styles.iconWrapper,
+                      { backgroundColor: colors.error + "15" },
+                    ]}
+                  >
+                    <Ionicons
+                      name="log-out-outline"
+                      size={16}
+                      color={colors.error}
+                    />
+                  </View>
+                  <Text style={[styles.settingLabel, { color: colors.error }]}>
+                    Log Out
+                  </Text>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.textTertiary}
+                />
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+          {/* Sticky Save Button — only when changes exist */}
+          {hasChanges && (
+            <View
+              style={[
+                styles.stickyBar,
+                {
+                  backgroundColor: colors.background,
+                  borderTopColor: colors.border,
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={[
+                  styles.saveBtn,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: isSaving ? 0.7 : 1,
+                  },
+                ]}
+                onPress={handleSave}
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <LoadingSpinner customSize={1.5} color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="save-outline" size={18} color="#fff" />
+                    <Text style={styles.saveBtnText}>Save Changes</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
+      )}
     </SafeAreaView>
   );
 };
@@ -320,31 +422,12 @@ const HelperSettings = () => {
 export default HelperSettings;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    gap: 10,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  sectionSub: {
-    fontSize: 13,
-    marginTop: -4,
-  },
+  container: { flex: 1 },
+  header: { paddingHorizontal: 16, paddingVertical: 16, borderBottomWidth: 1 },
+  headerTitle: { fontSize: 18, fontWeight: "700" },
+  section: { paddingHorizontal: 16, paddingTop: 20, gap: 10 },
+  sectionTitle: { fontSize: 15, fontWeight: "600" },
+  sectionSub: { fontSize: 13, marginTop: -4 },
   profileCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -353,28 +436,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  profileName: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  profileMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  profileRating: {
-    fontSize: 13,
-  },
-  profileDot: {
-    fontSize: 13,
-  },
-  profileEarnings: {
-    fontSize: 13,
-  },
-  earningsValue: {
-    fontWeight: "600",
-  },
+  profileName: { fontSize: 16, fontWeight: "700", marginBottom: 2 },
+  profileEmail: { fontSize: 13 },
   settingRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -389,56 +452,16 @@ const styles = StyleSheet.create({
     gap: 12,
     flex: 1,
   },
-  settingIconWrapper: {
+  iconWrapper: {
     width: 34,
     height: 34,
     borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
   },
-  panel: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 16,
-    gap: 12,
-    marginTop: -4,
-  },
-  saveButton: {
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 6,
-  },
-  saveText: { color: "#fff", fontWeight: "600", fontSize: 14 },
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  cardText: { flex: 1, fontSize: 14 },
-  cardBadge: { fontSize: 12, fontWeight: "600" },
-  notifRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  settingLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  settingSubLabel: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  radiusRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
+  settingLabel: { fontSize: 14, fontWeight: "500" },
+  settingSubLabel: { fontSize: 12, marginTop: 2 },
+  radiusRow: { flexDirection: "row", gap: 10 },
   radiusOption: {
     flex: 1,
     flexDirection: "row",
@@ -449,22 +472,34 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
   },
-  radiusText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  actionRow: {
+  radiusText: { fontSize: 13, fontWeight: "600" },
+  card: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: 14,
+    gap: 10,
+    padding: 12,
     borderRadius: 10,
     borderWidth: 1,
   },
-  saveSection: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
-    paddingBottom: 40,
+  cardText: { flex: 1, fontSize: 14 },
+  cardBadge: { fontSize: 12, fontWeight: "600" },
+  addButton: {
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+  },
+  addButtonText: { fontWeight: "600", fontSize: 14 },
+  stickyBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    borderTopWidth: 1,
   },
   saveBtn: {
     flexDirection: "row",
@@ -474,9 +509,5 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 10,
   },
-  saveBtnText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "600",
-  },
+  saveBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
 });

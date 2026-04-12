@@ -67,7 +67,10 @@ export const signUp = async (
       `,
     });
 
-    console.log({ data, error });
+    // Create default settings for the new user
+    await prisma.userSettings.create({
+      data: { userId: userData.userId },
+    });
 
     res.status(201).json({
       token,

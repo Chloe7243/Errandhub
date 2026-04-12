@@ -1,271 +1,693 @@
 import Avatar from "@/components/avatar";
+import EmptyState from "@/components/empty-state";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 import BackButton from "@/components/ui/back-button";
 import { Colors } from "@/constants/theme";
-import { useRouter } from "expo-router";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
-  Clock,
-  MapPin,
-  MessageCircle,
-  Navigation,
-  Phone,
-} from "lucide-react-native";
-import React from "react";
+  useGetErrandByIdQuery,
+  useSubmitOfferMutation,
+  useUpdateErrandStatusMutation,
+  useAcceptErrandMutation,
+} from "@/store/api/errand";
+import { formatErrandType, formatErrandStatus } from "@/utils/errand";
+import { displayErrorMessage } from "@/utils/errors";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  useColorScheme,
   View,
 } from "react-native";
-// import MapView, { Marker } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
+import { useAppDispatch } from "@/store/hooks";
+import { declineErrand } from "@/store/slices/helper";
 
-const TaskDetails = ({ task }: { task: any }) => {
+const HelperErrandDetails = () => {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
+  const { id } = useLocalSearchParams<{ id: string }>();
 
-  const mockTask = task ?? {
-    id: "1",
-    title: "Pick up dry cleaning",
-    price: "$5.00",
-    distance: "2.5km away",
-    urgency: "Quick",
-    status: "Pending",
-    requester: { firstName: "Sarah", lastName: "L" },
-    description:
-      "Please pick up my dry cleaning from Downtown Cleaners. The ticket number is #4492. It's already paid for, just need pickup and dropoff at my apartment lobby.",
-    pickupLocation: "Downtown Cleaners",
-    dropoffLocation: "123 Main St, Suite 4B",
-    postedAt: "10 mins ago",
+  const [offerAmount, setOfferAmount] = useState("");
+  const [showNegotiate, setShowNegotiate] = useState(false);
+
+  const {
+    currentData: data,
+    isLoading,
+    isError,
+  } = useGetErrandByIdQuery(id!, {
+    refetchOnMountOrArgChange: true,
+  });
+  const [submitOffer, { isLoading: isSubmitting }] = useSubmitOfferMutation();
+  const [updateStatus, { isLoading: isUpdating }] =
+    useUpdateErrandStatusMutation();
+  const [acceptErrand, { isLoading: isAccepting }] = useAcceptErrandMutation();
+
+  const errand = data?.errand;
+  const isPosted = errand?.status === "POSTED";
+  const isActive =
+    errand?.status === "IN_PROGRESS" || errand?.status === "ACCEPTED";
+  const hasOffer = errand?.offers?.length > 0;
+  const myOffer = errand?.offers?.[0];
+  const displayAmount = errand?.agreedPrice ?? errand?.suggestedPrice;
+  const basePrice = errand?.suggestedPrice || 5;
+  const maxPrice = basePrice * 2;
+
+  const handleAccept = async () => {
+    try {
+      await acceptErrand(id).unwrap();
+      Toast.show({ type: "success", text1: "Errand accepted" });
+    } catch (err) {
+      displayErrorMessage(err);
+    }
   };
+
+  const handleDecline = () => {
+    try {
+      dispatch(declineErrand(id));
+      router.back();
+    } catch (err) {
+      displayErrorMessage(err);
+    }
+  };
+
+  const handleSubmitOffer = async () => {
+    const amount = parseFloat(offerAmount);
+    if (!amount || amount <= 0) {
+      Toast.show({ type: "error", text1: "Please enter a valid amount" });
+      return;
+    }
+    try {
+      await submitOffer({ errandId: id!, bidAmount: amount }).unwrap();
+      Toast.show({ type: "success", text1: "Offer sent" });
+      setOfferAmount("");
+      setShowNegotiate(false);
+    } catch (err) {
+      displayErrorMessage(err);
+    }
+  };
+
+  const handleMarkComplete = async () => {
+    try {
+      await updateStatus({ id: id!, status: "REVIEWING" }).unwrap();
+      router.push(`/helper/upload-proof?errandId=${id}`);
+    } catch (err) {
+      displayErrorMessage(err);
+    }
+  };
+
+  const handleStartErrand = async () => {
+    try {
+      await updateStatus({ id: id!, status: "IN_PROGRESS" }).unwrap();
+      Toast.show({ type: "success", text1: "Errand started" });
+    } catch (err) {
+      displayErrorMessage(err);
+    }
+  };
+
+  const adjustOffer = (direction: "up" | "down") => {
+    const current = parseFloat(offerAmount) || basePrice;
+    if (direction === "up" && current + 0.5 <= maxPrice) {
+      setOfferAmount((current + 0.5).toFixed(2));
+    }
+    if (direction === "down" && current - 0.5 >= basePrice) {
+      setOfferAmount((current - 0.5).toFixed(2));
+    }
+  };
+
+  const currentOffer = parseFloat(offerAmount) || basePrice;
+  const fillPercent =
+    maxPrice > basePrice
+      ? ((currentOffer - basePrice) / (maxPrice - basePrice)) * 100
+      : 0;
+
+  if (isLoading) return <LoadingSpinner fullScreen />;
+  if (isError || !errand)
+    return <EmptyState fullScreen isError message="Errand not found" />;
 
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
     >
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            borderBottomColor: colors.border,
-            backgroundColor: colors.background,
-          },
-        ]}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        <BackButton noText />
-        <Text style={[styles.pageTitle, { color: colors.text }]}>
-          Task Details
-        </Text>
-        <View style={{ width: 36 }} />
-      </View>
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: colors.border }]}>
+          <BackButton />
+          <Text style={[styles.pageTitle, { color: colors.text }]}>
+            Task Details
+          </Text>
+          <View style={{ width: 40 }} />
+        </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-      >
-        {/* Map */}
-        <View style={[styles.mapContainer, { borderColor: colors.border }]}>
-          {/* <MapView
-            style={styles.map}
-            initialRegion={{
-              latitude: 37.78825,
-              longitude: -122.4324,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            }}
-          /> */}
-          <TouchableOpacity
-            style={[styles.navigateButton, { backgroundColor: colors.primary }]}
-            activeOpacity={0.8}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+        >
+          {/* Map placeholder */}
+          <View
+            style={[
+              styles.mapContainer,
+              {
+                backgroundColor: colors.backgroundSecondary,
+                borderColor: colors.border,
+              },
+            ]}
           >
-            <Navigation size={14} color="#fff" />
-            <Text style={styles.navigateButtonText}>Navigate</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Task Header */}
-        <View style={styles.section}>
-          <View style={styles.taskHeaderRow}>
-            <View
-              style={[
-                styles.urgencyBadge,
-                { backgroundColor: colors.primary + "15" },
-              ]}
-            >
-              <Text style={[styles.urgencyText, { color: colors.primary }]}>
-                {mockTask.urgency}
-              </Text>
-            </View>
-            <View style={styles.statusRow}>
-              <View
-                style={[styles.statusDot, { backgroundColor: colors.warning }]}
-              />
-              <Text style={[styles.statusText, { color: colors.warning }]}>
-                {mockTask.status}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.titlePriceRow}>
-            <Text style={[styles.taskTitle, { color: colors.text }]}>
-              {mockTask.title}
-            </Text>
-            <Text style={[styles.taskPrice, { color: colors.primary }]}>
-              {mockTask.price}
-            </Text>
-          </View>
-
-          <View style={styles.metaRow}>
-            <MapPin size={13} color={colors.textSecondary} />
-            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-              {mockTask.distance}
-            </Text>
-            <Clock size={13} color={colors.textSecondary} />
-            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-              {mockTask.postedAt}
-            </Text>
-          </View>
-        </View>
-
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-        {/* Requester */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Requester
-          </Text>
-          <View style={styles.requesterRow}>
-            <Avatar
-              firstName={mockTask.requester.firstName}
-              lastName={mockTask.requester.lastName}
-              size={44}
+            <Ionicons
+              name="map-outline"
+              size={32}
+              color={colors.textTertiary}
             />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.requesterName, { color: colors.text }]}>
-                {mockTask.requester.firstName} {mockTask.requester.lastName}
-              </Text>
-              <Text
-                style={[styles.requesterSub, { color: colors.textSecondary }]}
-              >
-                Requester
-              </Text>
-            </View>
+            <Text style={[styles.mapText, { color: colors.textTertiary }]}>
+              Map Preview
+            </Text>
             <TouchableOpacity
-              style={[
-                styles.iconButton,
-                {
-                  backgroundColor: colors.backgroundSecondary,
-                  borderColor: colors.border,
-                },
-              ]}
+              style={[styles.navigateBtn, { backgroundColor: colors.primary }]}
             >
-              <MessageCircle size={18} color={colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.iconButton,
-                {
-                  backgroundColor: colors.backgroundSecondary,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Phone size={18} color={colors.primary} />
+              <Ionicons name="navigate-outline" size={14} color="#fff" />
+              <Text style={styles.navigateBtnText}>Navigate</Text>
             </TouchableOpacity>
           </View>
-        </View>
 
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-        {/* Description */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Description
-          </Text>
-          <Text style={[styles.description, { color: colors.textSecondary }]}>
-            {mockTask.description}
-          </Text>
-        </View>
-
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-        {/* Locations */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Locations
-          </Text>
-          <View style={styles.locationBlock}>
-            <View style={styles.locationRow}>
+          {/* Task Header */}
+          <View style={styles.section}>
+            <View style={styles.row}>
               <View
                 style={[
-                  styles.locationDot,
-                  { backgroundColor: colors.primary },
+                  styles.badge,
+                  { backgroundColor: colors.primary + "15" },
                 ]}
-              />
-              <View>
-                <Text
-                  style={[
-                    styles.locationLabel,
-                    { color: colors.textSecondary },
-                  ]}
-                >
-                  Pickup Location
+              >
+                <Text style={[styles.badgeText, { color: colors.primary }]}>
+                  {formatErrandType(errand.type)}
                 </Text>
-                <Text style={[styles.locationValue, { color: colors.text }]}>
-                  {mockTask.pickupLocation}
+              </View>
+              <View style={styles.statusRow}>
+                <Ionicons name="ellipse" size={10} color={colors.warning} />
+                <Text style={[styles.statusText, { color: colors.warning }]}>
+                  {formatErrandStatus(errand.status)}
                 </Text>
               </View>
             </View>
-            <View
-              style={[styles.locationLine, { backgroundColor: colors.border }]}
-            />
-            <View style={styles.locationRow}>
-              <View
-                style={[styles.locationDot, { backgroundColor: colors.cta }]}
+
+            <View style={styles.row}>
+              <Text
+                style={[styles.taskTitle, { color: colors.text }]}
+                numberOfLines={2}
+              >
+                {errand.title}
+              </Text>
+              <Text style={[styles.taskPrice, { color: colors.primary }]}>
+                £{displayAmount?.toFixed(2) ?? "—"}
+              </Text>
+            </View>
+
+            <View style={styles.metaRow}>
+              <Ionicons
+                name="time-outline"
+                size={13}
+                color={colors.textSecondary}
               />
-              <View>
-                <Text
-                  style={[
-                    styles.locationLabel,
-                    { color: colors.textSecondary },
-                  ]}
-                >
-                  Drop-off Location
-                </Text>
-                <Text style={[styles.locationValue, { color: colors.text }]}>
-                  {mockTask.dropoffLocation}
-                </Text>
-              </View>
+              <Text style={[styles.metaText, { color: colors.textSecondary }]}>
+                {new Date(errand.createdAt).toLocaleDateString()}
+              </Text>
             </View>
           </View>
-        </View>
 
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-        {/* Actions */}
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.acceptBtn, { backgroundColor: colors.success }]}
-            activeOpacity={0.8}
-            onPress={() => router.push("/helper/upload-proof")}
-          >
-            <Text style={styles.acceptBtnText}>Mark as complete</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+          {/* Requester */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Requester
+            </Text>
+            <View style={styles.requesterRow}>
+              <Avatar
+                firstName={errand.requester?.firstName ?? ""}
+                lastName={errand.requester?.lastName ?? ""}
+                uri={errand.requester?.avatarUrl ?? undefined}
+                size={44}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.requesterName, { color: colors.text }]}>
+                  {errand.requester?.firstName} {errand.requester?.lastName}
+                </Text>
+                <Text
+                  style={[styles.requesterSub, { color: colors.textSecondary }]}
+                >
+                  Requester
+                </Text>
+              </View>
+              {isActive && (
+                <TouchableOpacity
+                  style={[
+                    styles.iconButton,
+                    {
+                      backgroundColor: colors.backgroundSecondary,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/helper/chat",
+                      params: {
+                        errandId: errand.id,
+                        requesterName: `${errand.requester.firstName} ${errand.requester.lastName}`,
+                      },
+                    })
+                  }
+                >
+                  <Ionicons
+                    name="chatbubble-outline"
+                    size={18}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          {/* Description */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Description
+            </Text>
+            <Text style={[styles.description, { color: colors.textSecondary }]}>
+              {errand.description}
+            </Text>
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          {/* Locations */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>
+              Locations
+            </Text>
+            <View style={styles.locationBlock}>
+              <View style={styles.locationRow}>
+                <View
+                  style={[
+                    styles.locationDot,
+                    { backgroundColor: colors.primary },
+                  ]}
+                />
+                <View>
+                  <Text
+                    style={[
+                      styles.locationLabel,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    Pickup
+                  </Text>
+                  <Text style={[styles.locationValue, { color: colors.text }]}>
+                    {errand.pickupLocation}
+                  </Text>
+                </View>
+              </View>
+              <View
+                style={[
+                  styles.locationLine,
+                  { backgroundColor: colors.border },
+                ]}
+              />
+              <View style={styles.locationRow}>
+                <View
+                  style={[styles.locationDot, { backgroundColor: colors.cta }]}
+                />
+                <View>
+                  <Text
+                    style={[
+                      styles.locationLabel,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    Drop-off
+                  </Text>
+                  <Text style={[styles.locationValue, { color: colors.text }]}>
+                    {errand.dropoffLocation}
+                  </Text>
+                </View>
+              </View>
+              {errand.pickupReference && (
+                <>
+                  <View
+                    style={[
+                      styles.divider,
+                      {
+                        backgroundColor: colors.border,
+                        marginHorizontal: 0,
+                        marginVertical: 8,
+                      },
+                    ]}
+                  />
+                  <View style={styles.metaRow}>
+                    <Ionicons
+                      name="document-text-outline"
+                      size={14}
+                      color={colors.textTertiary}
+                    />
+                    <Text
+                      style={[styles.metaText, { color: colors.textSecondary }]}
+                    >
+                      Ref: {errand.pickupReference}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+          {/* Response Section — only when posted */}
+          {isPosted && (
+            <View style={styles.section}>
+              {hasOffer ? (
+                <>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                    Your Offer
+                  </Text>
+                  <View
+                    style={[
+                      styles.offerConfirmed,
+                      {
+                        backgroundColor: colors.success + "15",
+                        borderColor: colors.success,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={20}
+                      color={colors.success}
+                    />
+                    <View>
+                      <Text
+                        style={[
+                          styles.offerConfirmedTitle,
+                          { color: colors.success },
+                        ]}
+                      >
+                        Offer Sent
+                      </Text>
+                      <Text
+                        style={[
+                          styles.offerConfirmedSub,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Your offer: £{myOffer?.amount?.toFixed(2)} — waiting for
+                        requester to respond
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                    Respond to Task
+                  </Text>
+
+                  {errand.suggestedPrice && (
+                    <View
+                      style={[
+                        styles.suggestedRow,
+                        {
+                          backgroundColor: colors.backgroundSecondary,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="information-circle-outline"
+                        size={16}
+                        color={colors.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.suggestedText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Suggested price:{" "}
+                        <Text
+                          style={{ color: colors.primary, fontWeight: "700" }}
+                        >
+                          £{errand.suggestedPrice.toFixed(2)}
+                        </Text>
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Accept */}
+                  <TouchableOpacity
+                    style={[
+                      styles.actionBtn,
+                      {
+                        backgroundColor: colors.success,
+                        opacity: isAccepting ? 0.7 : 1,
+                      },
+                    ]}
+                    onPress={handleAccept}
+                    disabled={isAccepting}
+                  >
+                    {isAccepting ? (
+                      <LoadingSpinner size="small" color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons
+                          name="checkmark-circle-outline"
+                          size={18}
+                          color="#fff"
+                        />
+                        <Text style={styles.actionBtnText}>
+                          Accept at £{errand.suggestedPrice?.toFixed(2) ?? "—"}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Negotiate */}
+                  {showNegotiate ? (
+                    <View
+                      style={[
+                        styles.negotiateContainer,
+                        {
+                          backgroundColor: colors.backgroundSecondary,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.offerAmountDisplay,
+                          { color: colors.text },
+                        ]}
+                      >
+                        £{currentOffer.toFixed(2)}
+                      </Text>
+                      <View style={styles.sliderRow}>
+                        <TouchableOpacity
+                          style={[
+                            styles.stepButton,
+                            {
+                              backgroundColor: colors.background,
+                              borderColor: colors.border,
+                            },
+                          ]}
+                          onPress={() => adjustOffer("down")}
+                        >
+                          <Ionicons
+                            name="remove"
+                            size={20}
+                            color={colors.text}
+                          />
+                        </TouchableOpacity>
+                        <View style={styles.sliderTrackContainer}>
+                          <View
+                            style={[
+                              styles.sliderTrack,
+                              { backgroundColor: colors.border },
+                            ]}
+                          />
+                          <View
+                            style={[
+                              styles.sliderFill,
+                              {
+                                backgroundColor: colors.primary,
+                                width: `${fillPercent}%`,
+                              },
+                            ]}
+                          />
+                        </View>
+                        <TouchableOpacity
+                          style={[
+                            styles.stepButton,
+                            {
+                              backgroundColor: colors.background,
+                              borderColor: colors.border,
+                            },
+                          ]}
+                          onPress={() => adjustOffer("up")}
+                        >
+                          <Ionicons name="add" size={20} color={colors.text} />
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.sliderLabels}>
+                        <Text
+                          style={[
+                            styles.sliderLabel,
+                            { color: colors.textTertiary },
+                          ]}
+                        >
+                          £{basePrice.toFixed(2)}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.sliderLabel,
+                            { color: colors.textTertiary },
+                          ]}
+                        >
+                          £{maxPrice.toFixed(2)}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[
+                          styles.actionBtn,
+                          {
+                            backgroundColor: colors.primary,
+                            opacity: isSubmitting ? 0.7 : 1,
+                          },
+                        ]}
+                        onPress={handleSubmitOffer}
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? (
+                          <LoadingSpinner size="small" color="#fff" />
+                        ) : (
+                          <Text style={styles.actionBtnText}>
+                            Make Offer — £{currentOffer.toFixed(2)}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      style={[
+                        styles.actionBtn,
+                        { backgroundColor: colors.primary },
+                      ]}
+                      onPress={() => {
+                        setOfferAmount(basePrice.toFixed(2));
+                        setShowNegotiate(true);
+                      }}
+                      disabled={isAccepting}
+                    >
+                      <Ionicons
+                        name="pricetag-outline"
+                        size={18}
+                        color="#fff"
+                      />
+                      <Text style={styles.actionBtnText}>Negotiate Price</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Decline */}
+                  <TouchableOpacity
+                    style={[
+                      styles.declineBtn,
+                      {
+                        borderColor: colors.error,
+                        opacity: 1,
+                      },
+                    ]}
+                    onPress={handleDecline}
+                    disabled={isAccepting}
+                  >
+                    <>
+                      <Ionicons
+                        name="close-circle-outline"
+                        size={18}
+                        color={colors.error}
+                      />
+                      <Text
+                        style={[styles.declineBtnText, { color: colors.error }]}
+                      >
+                        Decline
+                      </Text>
+                    </>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          )}
+
+          {/* Actions — when accepted or in progress */}
+          {isActive && (
+            <View style={styles.section}>
+              {errand.status === "ACCEPTED" && (
+                <TouchableOpacity
+                  style={[
+                    styles.actionBtn,
+                    {
+                      backgroundColor: colors.primary,
+                      opacity: isUpdating ? 0.7 : 1,
+                    },
+                  ]}
+                  onPress={handleStartErrand}
+                  disabled={isUpdating}
+                >
+                  <Ionicons name="play-outline" size={18} color="#fff" />
+                  <Text style={styles.actionBtnText}>Start Errand</Text>
+                </TouchableOpacity>
+              )}
+              {errand.status === "IN_PROGRESS" && (
+                <TouchableOpacity
+                  style={[
+                    styles.actionBtn,
+                    {
+                      backgroundColor: colors.success,
+                      opacity: isUpdating ? 0.7 : 1,
+                    },
+                  ]}
+                  onPress={handleMarkComplete}
+                  disabled={isUpdating}
+                >
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={styles.actionBtnText}>Mark as Complete</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
-export default TaskDetails;
+export default HelperErrandDetails;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -274,28 +696,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pageTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  content: {
-    paddingBottom: 32,
-  },
+  pageTitle: { fontSize: 20, fontWeight: "700" },
+  content: { paddingBottom: 40 },
   mapContainer: {
     height: 200,
     borderBottomWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     position: "relative",
   },
-  map: {
-    flex: 1,
-  },
-  navigateButton: {
+  mapText: { fontSize: 14 },
+  navigateBtn: {
     position: "absolute",
     bottom: 12,
     right: 12,
@@ -306,88 +718,26 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
   },
-  navigateButtonText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 10,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  taskHeaderRow: {
+  navigateBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  section: { paddingHorizontal: 16, paddingVertical: 16, gap: 10 },
+  sectionTitle: { fontSize: 15, fontWeight: "600" },
+  row: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  urgencyBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  urgencyText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statusText: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  titlePriceRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  taskTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    flex: 1,
-    marginRight: 12,
-  },
-  taskPrice: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  metaText: {
-    fontSize: 13,
-  },
-  divider: {
-    height: 1,
-    marginHorizontal: 16,
-  },
-  requesterRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  requesterName: {
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  requesterSub: {
-    fontSize: 12,
-    marginTop: 2,
-  },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  badgeText: { fontSize: 12, fontWeight: "600" },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  statusText: { fontSize: 13, fontWeight: "500" },
+  taskTitle: { fontSize: 18, fontWeight: "700", flex: 1, marginRight: 12 },
+  taskPrice: { fontSize: 18, fontWeight: "700" },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  metaText: { fontSize: 14 },
+  divider: { height: 1, marginHorizontal: 16 },
+  requesterRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  requesterName: { fontSize: 15, fontWeight: "600" },
+  requesterSub: { fontSize: 12, marginTop: 2 },
   iconButton: {
     width: 40,
     height: 40,
@@ -396,64 +746,94 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  description: {
-    fontSize: 14,
-    lineHeight: 22,
+  description: { fontSize: 14, lineHeight: 22 },
+  locationBlock: { gap: 4 },
+  locationRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  locationDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
+  locationLine: { width: 2, height: 20, marginLeft: 4, marginVertical: 2 },
+  locationLabel: { fontSize: 12, marginBottom: 2 },
+  locationValue: { fontSize: 14, fontWeight: "500" },
+  suggestedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
   },
-  locationBlock: {
-    gap: 4,
-  },
-  locationRow: {
+  suggestedText: { fontSize: 13, flex: 1 },
+  offerConfirmed: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 12,
-  },
-  locationDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginTop: 4,
-  },
-  locationLine: {
-    width: 2,
-    height: 20,
-    marginLeft: 4,
-    marginVertical: 2,
-  },
-  locationLabel: {
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  locationValue: {
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  actions: {
-    flexDirection: "row",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  declineBtn: {
-    flex: 1,
+    gap: 10,
+    padding: 14,
+    borderRadius: 10,
     borderWidth: 1,
+  },
+  offerConfirmedTitle: { fontSize: 14, fontWeight: "700" },
+  offerConfirmedSub: { fontSize: 13, marginTop: 2 },
+  negotiateContainer: {
+    gap: 12,
+    padding: 16,
     borderRadius: 10,
-    paddingVertical: 14,
+    borderWidth: 1,
+  },
+  offerAmountDisplay: {
+    fontSize: 28,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  sliderRow: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 12,
   },
-  declineBtnText: {
-    fontSize: 15,
-    fontWeight: "500",
+  stepButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  acceptBtn: {
-    flex: 2,
+  sliderTrackContainer: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  sliderTrack: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 3,
+  },
+  sliderFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  sliderLabels: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  sliderLabel: {
+    fontSize: 12,
+  },
+  actionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 16,
     borderRadius: 10,
-    paddingVertical: 14,
+  },
+  actionBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
+  declineBtn: {
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 10,
+    borderWidth: 1.5,
   },
-  acceptBtnText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "600",
-  },
+  declineBtnText: { fontSize: 15, fontWeight: "600" },
 });

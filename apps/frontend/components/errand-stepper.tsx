@@ -1,28 +1,29 @@
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { ErrandStatus } from "@errandhub/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
 
-type Step = "posted" | "accepted" | "in_progress" | "reviewing" | "completed";
-
-const STEPS: Step[] = [
-  "posted",
-  "accepted",
-  "in_progress",
-  "reviewing",
-  "completed",
+const STEPS: ErrandStatus[] = [
+  "POSTED",
+  "ACCEPTED",
+  "IN_PROGRESS",
+  "REVIEWING",
+  "COMPLETED",
 ];
 
-const LABELS: Record<Step, string> = {
-  posted: "Posted",
-  accepted: "Accepted",
-  in_progress: "In Progress",
-  reviewing: "Reviewing",
-  completed: "Completed",
+const LABELS: Record<ErrandStatus, string> = {
+  POSTED: "Posted",
+  ACCEPTED: "Accepted",
+  IN_PROGRESS: "In Progress",
+  REVIEWING: "Reviewing",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+  DISPUTED: "Disputed",
 };
 
 type Props = {
-  currentStep: Step;
+  currentStep: ErrandStatus;
 };
 
 const ErrandStepper = ({ currentStep }: Props) => {

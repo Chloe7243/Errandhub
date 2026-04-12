@@ -1,5 +1,7 @@
+import RoleIndicator from "@/components/role-indicator";
 import { Colors } from "@/constants/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { BottomTabBar } from "@react-navigation/bottom-tabs";
 import { Tabs } from "expo-router";
 import { useColorScheme } from "react-native";
 
@@ -18,6 +20,12 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.tabIconDefault,
       }}
+      tabBar={(props) => (
+        <>
+          <RoleIndicator />
+          <BottomTabBar {...props} />
+        </>
+      )}
     >
       <Tabs.Screen
         name="home"
