@@ -19,8 +19,8 @@ const RoleIndicator = () => {
         },
       ]}
     >
-      <View style={[styles.dot, { backgroundColor: colors.primary }]} />
-      <Text style={[styles.label, { color: colors.primary }]}>
+      <View style={[styles.dot, { backgroundColor: colors.text }]} />
+      <Text style={[styles.label, { color: colors.text }]}>
         {user?.role?.toUpperCase()} MODE
       </Text>
     </View>
@@ -35,7 +35,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderTopWidth: 1,
   },
   dot: {

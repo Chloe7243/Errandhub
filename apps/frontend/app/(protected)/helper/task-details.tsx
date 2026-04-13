@@ -1,6 +1,7 @@
 import Avatar from "@/components/avatar";
 import EmptyState from "@/components/empty-state";
 import LoadingSpinner from "@/components/ui/loading-spinner";
+import MapPreview from "@/components/ui/map-preview";
 import BackButton from "@/components/ui/back-button";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -17,6 +18,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -94,13 +96,17 @@ const HelperErrandDetails = () => {
     }
   };
 
-  const handleMarkComplete = async () => {
-    try {
-      await updateStatus({ errandId: id!, status: "REVIEWING" }).unwrap();
-      router.push(`/helper/upload-proof?errandId=${id}`);
-    } catch (err) {
-      displayErrorMessage(err);
-    }
+  const handleMarkComplete = () => {
+    router.push(`/helper/upload-proof?errandId=${id}`);
+  };
+
+  const handleNavigate = () => {
+    if (!errand?.pickupLat || !errand?.pickupLng) return;
+    const url =
+      Platform.OS === "ios"
+        ? `maps:?daddr=${errand.pickupLat},${errand.pickupLng}`
+        : `geo:${errand.pickupLat},${errand.pickupLng}?q=${errand.pickupLat},${errand.pickupLng}`;
+    Linking.openURL(url);
   };
 
   const handleStartErrand = async () => {
@@ -153,29 +159,47 @@ const HelperErrandDetails = () => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
         >
-          {/* Map placeholder */}
+          {/* Map */}
           <View
-            style={[
-              styles.mapContainer,
-              {
-                backgroundColor: colors.backgroundSecondary,
-                borderColor: colors.border,
-              },
-            ]}
+            style={[styles.mapSection, { borderBottomColor: colors.border }]}
           >
-            <Ionicons
-              name="map-outline"
-              size={32}
-              color={colors.textTertiary}
-            />
-            <Text style={[styles.mapText, { color: colors.textTertiary }]}>
-              Map Preview
-            </Text>
+            {errand.pickupLat && errand.pickupLng ? (
+              <MapPreview
+                pickupLat={errand.pickupLat}
+                pickupLng={errand.pickupLng}
+                dropoffLat={errand.dropoffLat ?? undefined}
+                dropoffLng={errand.dropoffLng ?? undefined}
+              />
+            ) : (
+              <View
+                style={[
+                  styles.mapPlaceholder,
+                  { backgroundColor: colors.backgroundSecondary },
+                ]}
+              >
+                <Ionicons
+                  name="map-outline"
+                  size={32}
+                  color={colors.textTertiary}
+                />
+                <Text style={[styles.mapText, { color: colors.textTertiary }]}>
+                  Map not available
+                </Text>
+              </View>
+            )}
             <TouchableOpacity
-              style={[styles.navigateBtn, { backgroundColor: colors.primary }]}
+              style={[
+                styles.navigateBtn,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: errand.pickupLat ? 1 : 0.4,
+                },
+              ]}
+              onPress={handleNavigate}
+              disabled={!errand.pickupLat}
             >
               <Ionicons name="navigate-outline" size={14} color="#fff" />
-              <Text style={styles.navigateBtnText}>Navigate</Text>
+              <Text style={styles.navigateBtnText}>Navigate to Pickup</Text>
             </TouchableOpacity>
           </View>
 
@@ -698,27 +722,29 @@ const styles = StyleSheet.create({
   },
   pageTitle: { fontSize: 20, fontWeight: "700" },
   content: { paddingBottom: 40 },
-  mapContainer: {
-    height: 200,
+  mapSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 10,
     borderBottomWidth: 1,
+  },
+  mapPlaceholder: {
+    height: 160,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    position: "relative",
   },
   mapText: { fontSize: 14 },
   navigateBtn: {
-    position: "absolute",
-    bottom: 12,
-    right: 12,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
   },
-  navigateBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  navigateBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
   section: { paddingHorizontal: 16, paddingVertical: 16, gap: 10 },
   sectionTitle: { fontSize: 15, fontWeight: "600" },
   row: {

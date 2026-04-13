@@ -21,6 +21,10 @@ export const createErrandSchema = z.object({
   dropoffLocation: z.string().min(1, "Dropoff location is required"),
   pickupReference: z.string().optional(),
   type: errandTypeEnum,
+  pickupLat: z.number().optional(),
+  pickupLng: z.number().optional(),
+  dropoffLat: z.number().optional(),
+  dropoffLng: z.number().optional(),
 });
 
 export type ErrandType = z.infer<typeof errandTypeEnum>;

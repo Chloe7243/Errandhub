@@ -28,7 +28,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 
@@ -58,11 +58,11 @@ const ErrandDetails = () => {
 
   useEffect(() => {
     if (reviewWindow) refetch();
-  }, [reviewWindow]);
+  }, [reviewWindow, refetch]);
 
   useEffect(() => {
     if (expiredErrandId === id) refetch();
-  }, [expiredErrandId]);
+  }, [expiredErrandId, id, refetch]);
 
   // Only show the counter offer modal if it's for this errand
   const counterOffer = useAppSelector((state: RootState) =>
@@ -101,21 +101,25 @@ const ErrandDetails = () => {
   const pendingOffers = errand?.offers ?? [];
 
   // Seconds until the 2-minute repost cooldown expires
-  const getRepostSecondsLeft = () =>
-    errand?.updatedAt
-      ? Math.max(
-          0,
-          Math.ceil(
-            (new Date(errand.updatedAt).getTime() +
-              2 * 60 * 1000 -
-              Date.now()) /
-              1000,
-          ),
-        )
-      : 0;
+  const getRepostSecondsLeft = useCallback(
+    () =>
+      errand?.updatedAt
+        ? Math.max(
+            0,
+            Math.ceil(
+              (new Date(errand.updatedAt).getTime() +
+                2 * 60 * 1000 -
+                Date.now()) /
+                1000,
+            ),
+          )
+        : 0,
+    [errand?.updatedAt],
+  );
 
-  const [repostSecondsLeft, setRepostSecondsLeft] =
-    useState(getRepostSecondsLeft);
+  const [repostSecondsLeft, setRepostSecondsLeft] = useState(() =>
+    getRepostSecondsLeft(),
+  );
 
   useEffect(() => {
     if (!isExpired) return;
@@ -126,7 +130,7 @@ const ErrandDetails = () => {
       if (remaining <= 0) clearInterval(interval);
     }, 1000);
     return () => clearInterval(interval);
-  }, [isExpired, errand?.updatedAt]);
+  }, [isExpired, errand?.updatedAt, getRepostSecondsLeft]);
 
   const handleRepost = () => {
     if (!errand) return;
@@ -171,7 +175,7 @@ const ErrandDetails = () => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <BackButton />
+          <BackButton onBack={() => router.push("/requester/home")} />
           <Text style={[styles.pageTitle, { color: colors.text }]}>
             Errand Details
           </Text>

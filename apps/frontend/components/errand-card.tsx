@@ -12,7 +12,6 @@ type Props = {
   title: string;
   location: string;
   amount?: number | null;
-  time: string;
   helperFirstName?: string | null;
   helperLastName?: string | null;
   helperAvatar?: string | null;
@@ -37,7 +36,6 @@ const ErrandCard = ({
   title,
   location,
   amount,
-  time,
   helperFirstName,
   helperLastName,
   helperAvatar,
@@ -147,13 +145,6 @@ const ErrandCard = ({
             </Text>
           </View>
         )}
-
-        <View style={styles.timeRow}>
-          <Ionicons name="time-outline" size={12} color={colors.textTertiary} />
-          <Text style={[styles.time, { color: colors.textTertiary }]}>
-            {time}
-          </Text>
-        </View>
       </View>
     </TouchableOpacity>
   );
@@ -233,10 +224,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontStyle: "italic",
   },
-  timeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  time: { fontSize: 12 },
 });

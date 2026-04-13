@@ -1,5 +1,6 @@
 import { Colors } from "@/constants/theme";
-import { Image, View, Text, StyleSheet, useColorScheme } from "react-native";
+import { Image, View, Text, StyleSheet } from "react-native";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type Props = {
   uri?: string;

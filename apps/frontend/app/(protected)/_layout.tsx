@@ -75,6 +75,13 @@ export default function ProtectedLayout() {
           }
         });
 
+        socket.on("proof_submitted", (payload) => {
+          dispatch(api.util.invalidateTags([{ type: TAGS.ERRAND, id: payload.errandId }, TAGS.REQUESTED_ERRANDS]));
+          if (user?.role === "requester") {
+            router.push(`/requester/review-completion?errandId=${payload.errandId}`);
+          }
+        });
+
         socket.on("match_unavailable", (payload) => {
           console.log("Match unavaialble", { payload });
           if (user?.role === "helper") {

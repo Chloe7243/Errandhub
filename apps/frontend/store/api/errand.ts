@@ -91,13 +91,17 @@ const errandApi = api.injectEndpoints({
       query: ({
         errandId,
         status,
+        proofImageUrl,
+        proofNote,
       }: {
         errandId: string;
         status: ErrandStatus;
+        proofImageUrl?: string;
+        proofNote?: string;
       }) => ({
         url: `/errand/${errandId}/status`,
         method: "PATCH",
-        body: { status },
+        body: { status, proofImageUrl, proofNote },
       }),
       invalidatesTags: (result, error, { errandId }) => [
         TAGS.REQUESTED_ERRANDS,

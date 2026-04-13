@@ -6,10 +6,15 @@ import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAppDispatch } from "@/store/hooks";
-import { useGetUserDetailsQuery } from "@/store/api/user";
+import {
+  useGetRequestedErrandsQuery,
+  useGetUserDetailsQuery,
+} from "@/store/api/user";
 import { logoutUser } from "@/store/slices";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
+import { useThemePreference } from "@/hooks/use-theme-preference";
+import { ThemePreference } from "@/store/slices/theme";
 import {
   Alert,
   ScrollView,
@@ -19,20 +24,47 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import SwitchRole from "@/components/switch-role";
 
-type Section = null | "editProfile" | "paymentMethods" | "notifications";
+type Section =
+  | null
+  | "editProfile"
+  | "paymentMethods"
+  | "notifications"
+  | "appearance";
 
 const Profile = () => {
   const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const [expanded, setExpanded] = useState<Section>(null);
+  const { preference: themePreference, changeTheme } = useThemePreference();
+
+  const THEME_OPTIONS: {
+    value: ThemePreference;
+    label: string;
+    icon: string;
+  }[] = [
+    { value: "light", label: "Light", icon: "sunny-outline" },
+    { value: "dark", label: "Dark", icon: "moon-outline" },
+    { value: "system", label: "System", icon: "phone-portrait-outline" },
+  ];
 
   const {
     currentData: data,
     isLoading,
     isError,
   } = useGetUserDetailsQuery(null);
+
+  const { data: activeErrandsData } = useGetRequestedErrandsQuery({
+    status: [
+      "POSTED",
+      "TENTATIVELY_ACCEPTED",
+      "ACCEPTED",
+      "IN_PROGRESS",
+      "REVIEWING",
+    ] as any,
+  });
 
   const user = data?.user;
 
@@ -41,7 +73,13 @@ const Profile = () => {
   };
 
   const handleLogout = (): void => {
-    Alert.alert("Log Out", "Are you sure you want to log out?", [
+    const activeCount = activeErrandsData?.errands?.length ?? 0;
+    const message =
+      activeCount > 0
+        ? `You have ${activeCount} active errand${activeCount > 1 ? "s" : ""} in progress. They may expire or be cancelled if you log out.`
+        : "Are you sure you want to log out?";
+
+    Alert.alert("Log Out", message, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Log Out",
@@ -65,10 +103,7 @@ const Profile = () => {
           message="Failed to load profile"
         />
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.scroll}>
           {/* Avatar + Name */}
           <View style={styles.hero}>
             <Avatar
@@ -218,18 +253,63 @@ const Profile = () => {
                 </View>
               ))}
             </ExpandableSection>
+
+            {/* Appearance */}
+            <ExpandableSection
+              icon="contrast-outline"
+              label="Appearance"
+              expanded={expanded === "appearance"}
+              onPress={() => toggle("appearance")}
+            >
+              <View style={styles.themeRow}>
+                {THEME_OPTIONS.map((opt) => {
+                  const active = themePreference === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      style={[
+                        styles.themeOption,
+                        {
+                          backgroundColor: active
+                            ? colors.primary
+                            : colors.backgroundSecondary,
+                          borderColor: active ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => changeTheme(opt.value)}
+                    >
+                      <Ionicons
+                        name={opt.icon as any}
+                        size={16}
+                        color={active ? "#fff" : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.themeLabel,
+                          { color: active ? "#fff" : colors.textSecondary },
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ExpandableSection>
           </View>
 
-          {/* Log Out */}
-          <TouchableOpacity
-            style={[styles.logoutButton, { borderColor: colors.border }]}
-            onPress={handleLogout}
-          >
-            <Ionicons name="log-out-outline" size={20} color={colors.error} />
-            <Text style={[styles.logoutText, { color: colors.error }]}>
-              Log Out
-            </Text>
-          </TouchableOpacity>
+          <View style={[styles.actions]}>
+            <SwitchRole />
+            <TouchableOpacity
+              style={[styles.logoutButton, { borderColor: colors.border }]}
+              onPress={handleLogout}
+            >
+              <Ionicons name="log-out-outline" size={20} color={colors.error} />
+              <Text style={[styles.logoutText, { color: colors.error }]}>
+                Log Out
+              </Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -292,6 +372,23 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#fff",
     alignSelf: "flex-end",
+  },
+  themeRow: { flexDirection: "row", gap: 10 },
+  themeOption: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  themeLabel: { fontSize: 13, fontWeight: "600" },
+  actions: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
   },
   logoutButton: {
     flexDirection: "row",

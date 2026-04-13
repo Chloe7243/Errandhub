@@ -4,10 +4,10 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  useColorScheme,
   View,
   ViewStyle,
 } from "react-native";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Ionicons } from "@expo/vector-icons";
 import { ChevronDown, ChevronUp } from "lucide-react-native";
 import { Colors } from "@/constants/theme";

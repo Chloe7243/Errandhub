@@ -114,8 +114,6 @@ export const getHelpedErrands = async (
       },
     });
 
-    console.log({ errands });
-
     res.status(200).json({ errands });
   } catch (error) {
     next(error);

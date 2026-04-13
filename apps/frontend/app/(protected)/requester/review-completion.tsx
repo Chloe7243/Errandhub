@@ -1,9 +1,16 @@
 import Avatar from "@/components/avatar";
 import BackButton from "@/components/ui/back-button";
+import EmptyState from "@/components/empty-state";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  useGetErrandByIdQuery,
+  useUpdateErrandStatusMutation,
+} from "@/store/api/errand";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState, useCallback } from "react";
 import {
   Image,
   ScrollView,
@@ -13,23 +20,118 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const MOCK_COMPLETION = {
-  proofImage: null, // swap with real image URI
-  helper: {
-    firstName: "Mike",
-    lastName: "T",
-    avatar: null,
-  },
-  note: "Laundry dropped off at door 3b. All items accounted for!",
-  time: "2 mins ago",
-  checks: ["Items delivered", "No substitutions needed", "Delivered on time"],
-};
+import Toast from "react-native-toast-message";
+import { displayErrorMessage } from "@/utils/errors";
 
 const ReviewCompletion = () => {
+  const { errandId } = useLocalSearchParams<{ errandId: string }>();
+  const { currentData, isLoading } = useGetErrandByIdQuery(errandId!, {
+    refetchOnMountOrArgChange: true,
+  });
+  const [updateStatus, { isLoading: isConfirming }] =
+    useUpdateErrandStatusMutation();
+  const errand = currentData?.errand;
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const router = useRouter();
+  const [autoConfirmCountdown, setAutoConfirmCountdown] = useState<number>(300); // 5 minutes in seconds
+
+  const handleAutoConfirm = useCallback(async () => {
+    if (!errand) return;
+    try {
+      await updateStatus({
+        errandId: errand.id,
+        status: "COMPLETED",
+      }).unwrap();
+      Toast.show({
+        type: "success",
+        text1: "Auto-confirmed",
+        text2: "Task marked as completed after 5 minutes.",
+      });
+    } catch (err) {
+      displayErrorMessage(err);
+    }
+  }, [errand, updateStatus]);
+
+  const handleManualConfirm = useCallback(async () => {
+    if (!errand) return;
+    try {
+      await updateStatus({
+        errandId: errand.id,
+        status: "COMPLETED",
+      }).unwrap();
+      Toast.show({
+        type: "success",
+        text1: "Completion confirmed!",
+        text2: "Payment will be released to the helper.",
+      });
+      router.push("/requester/home");
+    } catch (err) {
+      displayErrorMessage(err);
+    }
+  }, [errand, updateStatus, router]);
+
+  const formatCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  // Auto-confirm after 5 minutes if user hasn't manually confirmed
+  useEffect(() => {
+    if (!errand || errand.status !== "REVIEWING") return;
+
+    const timer = setInterval(() => {
+      setAutoConfirmCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          // Auto-confirm
+          handleAutoConfirm();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [errand, handleAutoConfirm]);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
+        <LoadingSpinner fullScreen />
+      </SafeAreaView>
+    );
+  }
+
+  if (!errand) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
+        <View
+          style={[
+            styles.header,
+            {
+              justifyContent: "flex-start",
+              paddingHorizontal: 14,
+              paddingVertical: 20,
+            },
+          ]}
+        >
+          <BackButton onBack={() => router.push("/requester/home")} />
+        </View>
+        <EmptyState
+          containerStyle={{ marginHorizontal: 14 }}
+          fullScreen
+          isError
+          message="Errand not found"
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -39,7 +141,7 @@ const ReviewCompletion = () => {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <BackButton />
+        <BackButton onBack={() => router.push("/requester/home")} />
         {/* Header */}
         <View style={styles.header}>
           <Text style={[styles.pageTitle, { color: colors.text }]}>
@@ -54,9 +156,9 @@ const ReviewCompletion = () => {
             { backgroundColor: colors.surface, borderColor: colors.border },
           ]}
         >
-          {MOCK_COMPLETION.proofImage ? (
+          {errand.proofImageUrl ? (
             <Image
-              source={{ uri: MOCK_COMPLETION.proofImage }}
+              source={{ uri: errand.proofImageUrl }}
               style={styles.proofImage}
               resizeMode="cover"
             />
@@ -87,34 +189,39 @@ const ReviewCompletion = () => {
         </View>
 
         {/* Helper Note */}
-        <View
-          style={[
-            styles.noteCard,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          <Avatar
-            firstName={MOCK_COMPLETION.helper.firstName}
-            lastName={MOCK_COMPLETION.helper.lastName}
-            size={44}
-          />
-          <View style={styles.noteContent}>
-            <View
-              style={[
-                styles.noteBubble,
-                { backgroundColor: colors.backgroundSecondary },
-              ]}
-            >
-              <Text style={[styles.noteText, { color: colors.text }]}>
-                {MOCK_COMPLETION.note}
+        {errand.helper && (
+          <View
+            style={[
+              styles.noteCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Avatar
+              firstName={errand.helper.firstName}
+              lastName={errand.helper.lastName}
+              uri={errand.helper.avatarUrl ?? undefined}
+              size={44}
+            />
+            <View style={styles.noteContent}>
+              <View
+                style={[
+                  styles.noteBubble,
+                  { backgroundColor: colors.backgroundSecondary },
+                ]}
+              >
+                <Text style={[styles.noteText, { color: colors.text }]}>
+                  {errand.completionNote || "No note provided."}
+                </Text>
+              </View>
+              <Text style={[styles.noteMeta, { color: colors.textTertiary }]}>
+                {errand.helper.firstName} {errand.helper.lastName} •{" "}
+                {errand.completedAt
+                  ? new Date(errand.completedAt).toLocaleString()
+                  : "Just now"}
               </Text>
             </View>
-            <Text style={[styles.noteMeta, { color: colors.textTertiary }]}>
-              {MOCK_COMPLETION.helper.firstName}{" "}
-              {MOCK_COMPLETION.helper.lastName} • {MOCK_COMPLETION.time}
-            </Text>
           </View>
-        </View>
+        )}
 
         {/* Task Verification */}
         <View
@@ -124,53 +231,81 @@ const ReviewCompletion = () => {
           ]}
         >
           <Text style={[styles.verificationTitle, { color: colors.text }]}>
-            Task Verification
+            Task Completed
           </Text>
-          {MOCK_COMPLETION.checks.map((check, index) => (
-            <View
-              key={check}
-              style={[
-                styles.checkRow,
-                index < MOCK_COMPLETION.checks.length - 1 && {
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.checkText, { color: colors.textSecondary }]}>
-                {check}
-              </Text>
-              <Ionicons
-                name="checkmark-circle"
-                size={24}
-                color={colors.success}
-              />
-            </View>
-          ))}
+          <View style={styles.checkRow}>
+            <Text style={[styles.checkText, { color: colors.textSecondary }]}>
+              Task marked as reviewing
+            </Text>
+            <Ionicons
+              name="checkmark-circle"
+              size={24}
+              color={colors.success}
+            />
+          </View>
         </View>
 
         {/* Actions */}
-        <TouchableOpacity
-          style={[styles.confirmButton, { backgroundColor: colors.success }]}
-          onPress={() => router.push("/requester/errands")}
-        >
-          <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
-          <Text style={styles.confirmText}>Confirm & Release Payment</Text>
-        </TouchableOpacity>
+        {errand.status === "REVIEWING" && (
+          <>
+            <View
+              style={[
+                styles.countdownCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <Ionicons
+                name="timer-outline"
+                size={16}
+                color={colors.textTertiary}
+              />
+              <Text
+                style={[styles.countdownText, { color: colors.textTertiary }]}
+              >
+                Auto-confirms in {formatCountdown(autoConfirmCountdown)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.confirmButton,
+                { backgroundColor: colors.success },
+              ]}
+              onPress={handleManualConfirm}
+              disabled={isConfirming}
+            >
+              {isConfirming ? (
+                <Text style={styles.confirmText}>Confirming...</Text>
+              ) : (
+                <>
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={20}
+                    color="#fff"
+                  />
+                  <Text style={styles.confirmText}>
+                    Confirm & Release Payment
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.disputeButton}
-          onPress={() => router.push("/requester/raise-dispute")}
-        >
-          <Ionicons
-            name="warning-outline"
-            size={16}
-            color={colors.textSecondary}
-          />
-          <Text style={[styles.disputeText, { color: colors.error }]}>
-            Raise Dispute
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.disputeButton}
+              onPress={() =>
+                router.push(`/requester/raise-dispute?id=${errand.id}`)
+              }
+            >
+              <Ionicons
+                name="warning-outline"
+                size={16}
+                color={colors.textSecondary}
+              />
+              <Text style={[styles.disputeText, { color: colors.error }]}>
+                Raise Dispute
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -242,6 +377,16 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   checkText: { fontSize: 14 },
+  countdownCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  countdownText: { fontSize: 13, fontWeight: "500" },
   confirmButton: {
     flexDirection: "row",
     alignItems: "center",

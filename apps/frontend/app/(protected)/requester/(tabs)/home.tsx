@@ -3,6 +3,7 @@ import EmptyState from "@/components/empty-state";
 import ErrandCard from "@/components/errand-card";
 import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useGetRequestedErrandsQuery } from "@/store/api/user";
 import { useAppSelector } from "@/store/hooks";
 import { User } from "@/types";
@@ -13,7 +14,6 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  useColorScheme,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,18 +24,34 @@ const Home = () => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const user = useAppSelector((state) => state.auth.user) as User;
+
   const { currentData: activeErrands, isLoading } = useGetRequestedErrandsQuery(
     {
-      status: ["ACCEPTED", "IN_PROGRESS", "POSTED"],
+      status: [
+        "ACCEPTED",
+        "IN_PROGRESS",
+        "REVIEWING",
+        "TENTATIVELY_ACCEPTED",
+        "POSTED",
+      ],
     },
     { refetchOnMountOrArgChange: true },
   );
+  const { currentData: completedErrands } = useGetRequestedErrandsQuery(
+    { status: ["COMPLETED"] },
+    { refetchOnMountOrArgChange: true },
+  );
 
-  const numberOfActiveErrands = activeErrands?.errands.length || 0;
-  const numberOfCompletedErrands = activeErrands?.errands.length || 0;
+  const numberOfActiveErrands = activeErrands?.errands.length ?? 0;
+  const numberOfCompletedErrands = completedErrands?.errands.length ?? 0;
+  const anyActiveErrands = numberOfActiveErrands > 0;
 
-  const anyActiveErrands =
-    (activeErrands?.errands && activeErrands?.errands.length !== 0) || false;
+  const greeting = (() => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning,";
+    if (hour < 18) return "Good afternoon,";
+    return "Good evening,";
+  })();
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -57,7 +73,7 @@ const Home = () => {
             />
             <View>
               <Text style={[styles.greeting, { color: colors.textSecondary }]}>
-                {"Good Morning,"}
+                {greeting}
               </Text>
               <Text style={[styles.name, { color: colors.text }]}>
                 {user?.firstName || ""}
@@ -97,10 +113,10 @@ const Home = () => {
           </View>
           <View style={[styles.card, { backgroundColor: colors.background }]}>
             <Text style={[styles.cardValue, { color: colors.text }]}>
-              {user?.rating?.toFixed(1) || "N/A"}
+              {numberOfActiveErrands + numberOfCompletedErrands}
             </Text>
             <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
-              Rating
+              Total Errands
             </Text>
           </View>
         </View>
@@ -140,7 +156,7 @@ const Home = () => {
             />
           ) : (
             activeErrands?.errands.map((errand: any) => {
-              // console.log({ errand });
+              console.log({ errand });
               return (
                 <ErrandCard
                   key={errand?.id}
@@ -148,8 +164,7 @@ const Home = () => {
                   status={errand?.status}
                   title={errand?.title}
                   location={errand?.pickupLocation}
-                  amount={errand?.amount}
-                  time={errand?.time}
+                  amount={errand?.agreedPrice}
                   helperFirstName={errand?.helper?.firstName}
                   helperLastName={errand?.helper?.lastName}
                   onPress={() =>

@@ -5,12 +5,15 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
+  useGetHelpedErrandsQuery,
   useGetSettingsQuery,
   useUpdateSettingsMutation,
 } from "@/store/api/user";
 import { logoutUser } from "@/store/slices";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
+import { useThemePreference } from "@/hooks/use-theme-preference";
+import { ThemePreference } from "@/store/slices/theme";
 import {
   Alert,
   ScrollView,
@@ -25,6 +28,7 @@ import Toast from "react-native-toast-message";
 import { displayErrorMessage } from "@/utils/errors";
 import { User } from "@/types";
 import AvailabilityToggle from "@/components/availability-toggle";
+import SwitchRole from "@/components/switch-role";
 
 type RadiusOption = 0.5 | 1 | 2 | 5;
 const RADIUS_OPTIONS: RadiusOption[] = [0.5, 1, 2, 5];
@@ -53,17 +57,27 @@ const HelperSettings = () => {
 
   const [isPaymentExpanded, setIsPaymentExpanded] = useState(false);
   const [isNotifExpanded, setIsNotifExpanded] = useState(false);
+  const { preference: themePreference, changeTheme } = useThemePreference();
+
+  const THEME_OPTIONS: {
+    value: ThemePreference;
+    label: string;
+    icon: string;
+  }[] = [
+    { value: "light", label: "Light", icon: "sunny-outline" },
+    { value: "dark", label: "Dark", icon: "moon-outline" },
+    { value: "system", label: "System", icon: "phone-portrait-outline" },
+  ];
   const [savedSettings, setSavedSettings] =
     useState<Settings>(DEFAULT_SETTINGS);
   const [currentSettings, setCurrentSettings] =
     useState<Settings>(DEFAULT_SETTINGS);
 
-  const {
-    currentData: settingsData,
-    isLoading,
-    error,
-  } = useGetSettingsQuery(null);
+  const { currentData: settingsData, isLoading } = useGetSettingsQuery(null);
   const [updateSettings, { isLoading: isSaving }] = useUpdateSettingsMutation();
+  const { data: activeErrandsData } = useGetHelpedErrandsQuery({
+    status: ["ACCEPTED", "IN_PROGRESS", "REVIEWING"] as any,
+  });
 
   useEffect(() => {
     if (settingsData?.settings) {
@@ -101,7 +115,13 @@ const HelperSettings = () => {
   };
 
   const handleLogout = () => {
-    Alert.alert("Log Out", "Are you sure you want to log out?", [
+    const activeCount = activeErrandsData?.errands?.length ?? 0;
+    const message =
+      activeCount > 0
+        ? `You have ${activeCount} active errand${activeCount > 1 ? "s" : ""} in progress. They may be cancelled if you log out.`
+        : "Are you sure you want to log out?";
+
+    Alert.alert("Log Out", message, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Log Out",
@@ -227,6 +247,52 @@ const HelperSettings = () => {
               </View>
             </View>
 
+            {/* Appearance */}
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Appearance
+              </Text>
+              <Text
+                style={[styles.sectionSub, { color: colors.textSecondary }]}
+              >
+                Choose your preferred theme
+              </Text>
+              <View style={styles.radiusRow}>
+                {THEME_OPTIONS.map((opt) => {
+                  const active = themePreference === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      style={[
+                        styles.radiusOption,
+                        {
+                          backgroundColor: active
+                            ? colors.primary
+                            : colors.backgroundSecondary,
+                          borderColor: active ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => changeTheme(opt.value)}
+                    >
+                      <Ionicons
+                        name={opt.icon as any}
+                        size={14}
+                        color={active ? "#fff" : colors.textSecondary}
+                      />
+                      <Text
+                        style={[
+                          styles.radiusText,
+                          { color: active ? "#fff" : colors.textSecondary },
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
             {/* Notifications */}
             <ExpandableSection
               icon="notifications-outline"
@@ -340,9 +406,7 @@ const HelperSettings = () => {
 
             {/* Account */}
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                Account
-              </Text>
+              <SwitchRole />
               <TouchableOpacity
                 style={[
                   styles.settingRow,

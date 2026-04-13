@@ -1,6 +1,23 @@
 import { Errand } from "../../generated/prisma";
 import { prisma } from "../lib/prisma";
-import { emitToUser, getConnectedHelpers } from "../lib/socket";
+import { emitToUser, getConnectedHelpers, type ConnectedHelper } from "../lib/socket";
+
+const haversineKm = (
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
 
 type MatchingState = {
   errandId: string;
@@ -110,22 +127,38 @@ const scheduleHelper = async (errandId: string) => {
     return;
   }
 
-  const availableHelperIds = (
-    await prisma.userSettings.findMany({
-      where: {
-        isAvailable: true,
-        userId: { not: errand.requesterId },
-      },
-      select: {
-        userId: true,
-      },
-    })
-  ).map((setting) => setting.userId);
+  const availableSettings = await prisma.userSettings.findMany({
+    where: {
+      isAvailable: true,
+      userId: { not: errand.requesterId },
+    },
+    select: { userId: true, notificationRadius: true },
+  });
 
-  const connectedHelperIds = getConnectedHelpers().filter((helperId) =>
-    availableHelperIds.includes(helperId),
+  const availableMap = new Map(
+    availableSettings.map((s) => [s.userId, s.notificationRadius]),
   );
-  console.log({ availableHelperIds, connectedHelperIds });
+
+  const connectedHelpers = getConnectedHelpers().filter(({ userId }) =>
+    availableMap.has(userId),
+  );
+
+  // Filter by notification radius when both the helper and errand have coordinates
+  const inRangeHelpers = connectedHelpers.filter(({ userId, coordinates }) => {
+    if (!coordinates || !errand.pickupLat || !errand.pickupLng) return true;
+    const radius = availableMap.get(userId) ?? 2;
+    return (
+      haversineKm(
+        coordinates.lat,
+        coordinates.lng,
+        errand.pickupLat,
+        errand.pickupLng,
+      ) <= radius
+    );
+  });
+
+  const connectedHelperIds = inRangeHelpers.map(({ userId }) => userId);
+  console.log({ availableCount: availableMap.size, connectedHelperIds });
 
   if (connectedHelperIds.length === 0) {
     await expireErrand(errandId);

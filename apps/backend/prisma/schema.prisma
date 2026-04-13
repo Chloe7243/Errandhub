@@ -130,6 +130,10 @@ model Errand {
   proofNote             String?
   completedAt           DateTime?
   type                  ErrandType
+  pickupLat             Float?
+  pickupLng             Float?
+  dropoffLat            Float?
+  dropoffLng            Float?
   // complexity      Complexity
 
   payment   PaymentTransaction? @relation("ErrandPayment")

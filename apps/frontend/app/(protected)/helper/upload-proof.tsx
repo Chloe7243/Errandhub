@@ -1,6 +1,13 @@
-// app/helper/upload-proof.tsx
 import BackButton from "@/components/ui/back-button";
+import EmptyState from "@/components/empty-state";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+  useGetErrandByIdQuery,
+  useUpdateErrandStatusMutation,
+} from "@/store/api/errand";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Camera, CheckCircle, FileImage, X } from "lucide-react-native";
 import React, { useState } from "react";
 import {
@@ -11,33 +18,46 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  useColorScheme,
   View,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
+import { displayErrorMessage } from "@/utils/errors";
 
-type UploadProofProps = {
-  taskId: string;
-  taskTitle: string;
-  onBack: () => void;
-  onSubmit: (proof: { imageUri: string; note: string }) => void;
-};
+const UploadProof = () => {
+  const router = useRouter();
+  const { errandId } = useLocalSearchParams<{ errandId: string }>();
+  const { currentData, isLoading } = useGetErrandByIdQuery(errandId!, {
+    refetchOnMountOrArgChange: true,
+  });
+  const [updateStatus, { isLoading: isSubmitting }] =
+    useUpdateErrandStatusMutation();
+  const errand = currentData?.errand;
 
-const UploadProof = ({
-  taskId,
-  taskTitle,
-  onBack,
-  onSubmit,
-}: UploadProofProps) => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [note, setNote] = useState<string>("");
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const handlePickImage = (): void => {
-    // hook up to expo-image-picker here
-    console.log("Pick image for task", taskId);
+    // Simplified image picker using alerts - in production, integrate expo-image-picker
+    Alert.alert("Upload Photo", "Select image source", [
+      {
+        text: "Sample Image",
+        onPress: () => {
+          // Use a sample image URL for now
+          setImageUri(
+            "https://via.placeholder.com/400x400?text=Proof+of+Completion",
+          );
+        },
+      },
+      {
+        text: "Cancel",
+        onPress: () => {},
+        style: "cancel",
+      },
+    ]);
   };
 
   const handleRemoveImage = (): void => {
@@ -45,16 +65,52 @@ const UploadProof = ({
   };
 
   const handleSubmit = async (): Promise<void> => {
-    if (!imageUri) return;
-    setIsSubmitting(true);
+    if (!imageUri || !errand) return;
+
     try {
-      await onSubmit({ imageUri, note });
-    } finally {
-      setIsSubmitting(false);
+      await updateStatus({
+        errandId: errand.id,
+        status: "REVIEWING",
+        proofImageUrl: imageUri,
+        proofNote: note.trim() || undefined,
+      }).unwrap();
+
+      Toast.show({
+        type: "success",
+        text1: "Proof submitted!",
+        text2: "Waiting for requester to review.",
+      });
+
+      router.push(`/helper/task-details?id=${errand.id}`);
+    } catch (err) {
+      displayErrorMessage(err);
     }
   };
 
   const canSubmit = !!imageUri && !isSubmitting;
+
+  if (isLoading) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
+        <LoadingSpinner fullScreen />
+      </SafeAreaView>
+    );
+  }
+
+  if (!errand) {
+    return (
+      <SafeAreaView
+        style={[styles.container, { backgroundColor: colors.background }]}
+      >
+        <View style={styles.header}>
+          <BackButton onBack={() => router.back()} />
+        </View>
+        <EmptyState fullScreen isError message="Errand not found" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -70,7 +126,7 @@ const UploadProof = ({
           },
         ]}
       >
-        <BackButton noText />
+        <BackButton onBack={() => router.back()} noText />
         <Text style={[styles.pageTitle, { color: colors.text }]}>
           Upload Proof
         </Text>
@@ -96,7 +152,7 @@ const UploadProof = ({
           <Text style={[styles.taskRefText, { color: colors.textSecondary }]}>
             Proof for:{" "}
             <Text style={[styles.taskRefTitle, { color: colors.text }]}>
-              {taskTitle ?? "Pick up dry cleaning"}
+              {errand.title}
             </Text>
           </Text>
         </View>

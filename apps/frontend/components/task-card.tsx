@@ -2,13 +2,8 @@
 import { Colors } from "@/constants/theme";
 import { MapPin } from "lucide-react-native";
 import React from "react";
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useColorScheme,
-  View,
-} from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 
 type Task = {
   id: string;

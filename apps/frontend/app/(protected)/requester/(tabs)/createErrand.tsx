@@ -1,4 +1,7 @@
 import Input from "@/components/ui/input";
+import AddressPicker, {
+  type LocationCoords,
+} from "@/components/ui/address-picker";
 import RichTextInput from "@/components/ui/rich-text-area";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -44,6 +47,8 @@ const CreateErrand = () => {
   const [taskType, setTaskType] = useState<ErrandType>(
     prefill.type ?? "PICKUP_DELIVERY",
   );
+  const [pickupCoords, setPickupCoords] = useState<LocationCoords | null>(null);
+  const [dropoffCoords, setDropoffCoords] = useState<LocationCoords | null>(null);
 
   const {
     control,
@@ -71,7 +76,14 @@ const CreateErrand = () => {
 
   const onSubmit = async (data: CreateErrandInput) => {
     try {
-      const result = await createErrand({ ...data, type: taskType }).unwrap();
+      const result = await createErrand({
+        ...data,
+        type: taskType,
+        pickupLat: pickupCoords?.lat,
+        pickupLng: pickupCoords?.lng,
+        dropoffLat: dropoffCoords?.lat,
+        dropoffLng: dropoffCoords?.lng,
+      } as any).unwrap();
       Toast.show({ type: "success", text1: "Errand posted successfully" });
       router.push(`/requester/errand-details?id=${result.errand.id}`);
     } catch (err) {
@@ -157,21 +169,14 @@ const CreateErrand = () => {
             <Controller
               control={control}
               name="pickupLocation"
-              render={({ field: { value, onChange, onBlur } }) => (
-                <Input
+              render={({ field: { value, onChange } }) => (
+                <AddressPicker
                   label="Pickup Location"
-                  placeholder="e.g. Student Union Reception"
+                  placeholder="Search pickup address..."
                   value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
+                  onSelect={onChange}
+                  onCoordinatesSelect={setPickupCoords}
                   error={errors.pickupLocation?.message}
-                  leftIcon={
-                    <Ionicons
-                      name="location-outline"
-                      size={18}
-                      color={colors.textTertiary}
-                    />
-                  }
                 />
               )}
             />
@@ -179,42 +184,17 @@ const CreateErrand = () => {
             <Controller
               control={control}
               name="dropoffLocation"
-              render={({ field: { value, onChange, onBlur } }) => (
-                <Input
+              render={({ field: { value, onChange } }) => (
+                <AddressPicker
                   label="Drop-off Location"
-                  placeholder="e.g. Building 3, Room 42"
+                  placeholder="Search drop-off address..."
                   value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
+                  onSelect={onChange}
+                  onCoordinatesSelect={setDropoffCoords}
                   error={errors.dropoffLocation?.message}
-                  leftIcon={
-                    <Ionicons
-                      name="location-outline"
-                      size={18}
-                      color={colors.textTertiary}
-                    />
-                  }
                 />
               )}
             />
-
-            {/* Map Placeholder */}
-            <View
-              style={[
-                styles.mapPlaceholder,
-                {
-                  backgroundColor: colors.backgroundSecondary,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Ionicons
-                name="map-outline"
-                size={24}
-                color={colors.textTertiary}
-              />
-              <Text style={{ color: colors.textTertiary }}>Map Preview</Text>
-            </View>
 
             <Controller
               control={control}

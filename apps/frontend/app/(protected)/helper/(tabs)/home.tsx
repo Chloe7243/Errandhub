@@ -25,22 +25,68 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { User } from "@/types";
+// import {
+//   setCoordinates,
+//   setLocationEnabled,
+//   setPermissionStatus,
+// } from "@/store/slices/location";
+import * as Location from "expo-location";
 
 const HelperHome = () => {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
-  const dispatch = useAppDispatch();
-  const user = useAppSelector((state: RootState) => state.auth.user) as User;
   const helperRequest = useAppSelector(
     (state: RootState) => state.matching.helperRequest,
+  );
+  const user = useAppSelector((state: RootState) => state.auth.user) as User;
+  const [location, setLocation] = useState<Location.LocationObject | null>(
+    null,
   );
 
   const { currentData: activeData, isLoading } = useGetHelpedErrandsQuery(
     { status: ["ACCEPTED", "IN_PROGRESS", "REVIEWING"] },
     { refetchOnMountOrArgChange: true },
   );
+  const { currentData: completedData } = useGetHelpedErrandsQuery(
+    { status: ["COMPLETED"] },
+    { refetchOnMountOrArgChange: true },
+  );
   const { currentData: settingsData } = useGetSettingsQuery(null);
+
+  useEffect(() => {
+    (async function getCurrentLocation() {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      const loc = await Location.getCurrentPositionAsync({});
+      setLocation(loc);
+      const socket = getSocket();
+      socket?.emit("update_location", {
+        lat: loc.coords.latitude,
+        lng: loc.coords.longitude,
+      });
+    })();
+  }, []);
+
+  const completedErrands = completedData?.errands ?? [];
+
+  const todayEarnings = completedErrands
+    .filter((e: any) => {
+      if (!e.completedAt) return false;
+      const d = new Date(e.completedAt);
+      const now = new Date();
+      return d.toDateString() === now.toDateString();
+    })
+    .reduce((sum: number, e: any) => sum + (e.agreedPrice ?? 0), 0);
+
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  weekStart.setHours(0, 0, 0, 0);
+
+  const weekEarnings = completedErrands
+    .filter((e: any) => e.completedAt && new Date(e.completedAt) >= weekStart)
+    .reduce((sum: number, e: any) => sum + (e.agreedPrice ?? 0), 0);
 
   const [isAvailable, setIsAvailable] = useState(false);
 
@@ -88,7 +134,12 @@ const HelperHome = () => {
             />
             <View>
               <Text style={[styles.greeting, { color: colors.textSecondary }]}>
-                Good morning,
+                {(() => {
+                  const h = new Date().getHours();
+                  if (h < 12) return "Good morning,";
+                  if (h < 18) return "Good afternoon,";
+                  return "Good evening,";
+                })()}
               </Text>
               <Text style={[styles.name, { color: colors.text }]}>
                 {user?.firstName}
@@ -107,11 +158,19 @@ const HelperHome = () => {
           </Text>
           <View style={styles.cardsRow}>
             {[
-              { label: "Today", value: "—", icon: "trending-up-outline" },
-              { label: "This Week", value: "—", icon: "wallet-outline" },
+              {
+                label: "Today",
+                value: `£${todayEarnings.toFixed(2)}`,
+                icon: "trending-up-outline",
+              },
+              {
+                label: "This Week",
+                value: `£${weekEarnings.toFixed(2)}`,
+                icon: "wallet-outline",
+              },
               {
                 label: "Completed",
-                value: "—",
+                value: String(completedErrands.length),
                 icon: "checkmark-circle-outline",
               },
             ].map((stat) => (

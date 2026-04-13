@@ -4,6 +4,7 @@ import { AppError } from "../middleware/errors";
 import { Response, NextFunction } from "express";
 import { createErrandSchema } from "@errandhub/shared";
 import { startErrandMatching } from "../services/matching";
+import { emitToUser } from "../lib/socket";
 
 export const createErrand = async (
   req: AuthRequest,
@@ -22,6 +23,10 @@ export const createErrand = async (
       dropoffLocation,
       pickupReference,
       type,
+      pickupLat,
+      pickupLng,
+      dropoffLat,
+      dropoffLng,
     } = parsed.data;
 
     const activeErrandCount = await prisma.errand.count({
@@ -49,6 +54,10 @@ export const createErrand = async (
         dropoffLocation,
         pickupReference,
         suggestedPrice,
+        pickupLat,
+        pickupLng,
+        dropoffLat,
+        dropoffLng,
       },
     });
 
@@ -296,7 +305,7 @@ export const updateErrandStatus = async (
 ) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
+    const { status, proofImageUrl, proofNote } = req.body;
     const errand = await prisma.errand.findUnique({ where: { id } });
 
     if (!errand) throw new AppError("Errand not found", 404);
@@ -338,6 +347,7 @@ export const updateErrandStatus = async (
       where: { id },
       data: {
         status,
+        ...(status === "REVIEWING" && { proofImageUrl, proofNote }),
         ...(status === "COMPLETED" && { completedAt: new Date() }),
         ...(status === "POSTED" && {
           helperId: null,
@@ -349,6 +359,12 @@ export const updateErrandStatus = async (
         }),
       },
     });
+
+    if (status === "REVIEWING") {
+      emitToUser(updatedErrand.requesterId, "proof_submitted", {
+        errandId: updatedErrand.id,
+      });
+    }
 
     res
       .status(200)

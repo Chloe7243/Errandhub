@@ -13,3 +13,11 @@ export const getToken = async () => {
 export const deleteToken = async () => {
   await SecureStore.deleteItemAsync(TOKEN_KEY);
 };
+
+export const saveValue = async (key: string, value: string) => {
+  await SecureStore.setItemAsync(key, value);
+};
+
+export const getValue = async (key: string) => {
+  return await SecureStore.getItemAsync(key);
+};

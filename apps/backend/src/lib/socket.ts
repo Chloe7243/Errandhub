@@ -13,7 +13,13 @@ let io: Server | null = null;
 
 // Stores all active socket IDs per user so multiple tabs/devices are handled
 // correctly. A user is only considered offline when their last socket disconnects.
-const userSockets = new Map<string, { socketIds: Set<string>; role: string }>();
+type UserSocketEntry = {
+  socketIds: Set<string>;
+  role: string;
+  coordinates?: { lat: number; lng: number };
+};
+
+const userSockets = new Map<string, UserSocketEntry>();
 
 export const initSocket = (httpServer: HttpServer) => {
   io = new Server(httpServer, {
@@ -123,6 +129,15 @@ export const initSocket = (httpServer: HttpServer) => {
       },
     );
 
+    socket.on(
+      "update_location",
+      ({ lat, lng }: { lat: number; lng: number }) => {
+        if (role !== "helper") return;
+        const entry = userSockets.get(userId);
+        if (entry) entry.coordinates = { lat, lng };
+      },
+    );
+
     socket.on("leave_room", (errandId: string) => {
       socket.leave(errandId);
     });
@@ -142,10 +157,15 @@ export const initSocket = (httpServer: HttpServer) => {
   return io;
 };
 
-export const getConnectedHelpers = () =>
+export type ConnectedHelper = {
+  userId: string;
+  coordinates?: { lat: number; lng: number };
+};
+
+export const getConnectedHelpers = (): ConnectedHelper[] =>
   Array.from(userSockets.entries())
     .filter(([, value]) => value.role === "helper")
-    .map(([userId]) => userId);
+    .map(([userId, value]) => ({ userId, coordinates: value.coordinates }));
 
 // Emits to ALL active sockets for a user (covers multiple tabs/devices)
 export const emitToUser = (userId: string, event: string, payload: any) => {

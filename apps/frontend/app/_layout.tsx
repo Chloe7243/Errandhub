@@ -14,8 +14,16 @@ import { useEffect, useState } from "react";
 import "react-native-reanimated";
 import { Provider } from "react-redux";
 import Toast from "react-native-toast-message";
-import { getToken } from "@/utils/secure-store";
+import {
+  getToken,
+  saveValue,
+  getValue,
+  deleteToken,
+} from "@/utils/secure-store";
 import { AuthState, loginUser } from "@/store/slices";
+import { setThemePreference, ThemePreference } from "@/store/slices/theme";
+
+const THEME_KEY = "theme_preference";
 import { User } from "@/types/user";
 
 SplashScreen.preventAutoHideAsync();
@@ -44,10 +52,16 @@ function RootLayoutNav() {
   useEffect(() => {
     async function prepare() {
       try {
-        const token = await getToken();
+        const [token, savedTheme] = await Promise.all([
+          getToken(),
+          getValue(THEME_KEY),
+        ]);
         if (token) {
           const user = jwtDecode<User>(token);
           dispatch(loginUser({ user, token }));
+        }
+        if (savedTheme) {
+          dispatch(setThemePreference(savedTheme as ThemePreference));
         }
       } finally {
         setIsReady(true);
