@@ -1,20 +1,21 @@
-import Avatar from "@/components/avatar";
-import LoadingSpinner from "@/components/ui/loading-spinner";
 import AvailabilityToggle from "@/components/availability-toggle";
+import Avatar from "@/components/avatar";
 import DispatchRequestModal from "@/components/dispatch-request-modal";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import type { RootState } from "@/store";
 import {
   useGetHelpedErrandsQuery,
   useGetSettingsQuery,
 } from "@/store/api/user";
-import { formatErrandType } from "@/utils/errand";
-import { useRouter } from "expo-router";
-import { getSocket } from "@/utils/socket";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearHelperRequest } from "@/store/slices";
+import { User } from "@/types";
+import { formatErrandType } from "@/utils/errand";
+import { getSocket } from "@/utils/socket";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ScrollView,
@@ -24,12 +25,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { User } from "@/types";
 // import {
 //   setCoordinates,
 //   setLocationEnabled,
 //   setPermissionStatus,
 // } from "@/store/slices/location";
+import { activeStatuses } from "@errandhub/shared";
 import * as Location from "expo-location";
 
 const HelperHome = () => {
@@ -41,12 +42,13 @@ const HelperHome = () => {
     (state: RootState) => state.matching.helperRequest,
   );
   const user = useAppSelector((state: RootState) => state.auth.user) as User;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [location, setLocation] = useState<Location.LocationObject | null>(
     null,
   );
 
   const { currentData: activeData, isLoading } = useGetHelpedErrandsQuery(
-    { status: ["ACCEPTED", "IN_PROGRESS", "REVIEWING"] },
+    { status: activeStatuses },
     { refetchOnMountOrArgChange: true },
   );
   const { currentData: completedData } = useGetHelpedErrandsQuery(

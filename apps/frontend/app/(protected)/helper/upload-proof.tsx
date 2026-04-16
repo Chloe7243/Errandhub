@@ -7,11 +7,11 @@ import {
   useGetErrandByIdQuery,
   useUpdateErrandStatusMutation,
 } from "@/store/api/errand";
+import * as ImagePicker from "expo-image-picker";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Camera, CheckCircle, FileImage, X } from "lucide-react-native";
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Image,
   ScrollView,
   StyleSheet,
@@ -38,25 +38,79 @@ const UploadProof = () => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [note, setNote] = useState<string>("");
 
+  const uploadImage = async (localUri: string): Promise<string> => {
+    const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME ?? "";
+    const uploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? "";
+    const filename = localUri.split("/").pop() ?? "proof.jpg";
+    const type = filename.endsWith(".png") ? "image/png" : "image/jpeg";
+
+    const formData = new FormData();
+    formData.append("file", { uri: localUri, name: filename, type } as any);
+    formData.append("upload_preset", uploadPreset);
+
+    const res = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+      { method: "POST", body: formData },
+    );
+    if (!res.ok) throw new Error("Upload failed");
+    const data = await res.json();
+    return data.secure_url as string;
+  };
+
+  const pickImage = async (useCamera: boolean): Promise<void> => {
+    if (useCamera) {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== "granted") {
+        Toast.show({ type: "error", text1: "Camera permission required" });
+        return;
+      }
+    } else {
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Toast.show({
+          type: "error",
+          text1: "Photo library permission required",
+        });
+        return;
+      }
+    }
+
+    const result = useCamera
+      ? await ImagePicker.launchCameraAsync({
+          mediaTypes: "images",
+          quality: 0.8,
+        })
+      : await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: "images",
+          quality: 0.8,
+        });
+
+    if (result.canceled) return;
+
+    setUploading(true);
+    try {
+      const url = await uploadImage(result.assets[0].uri);
+      setImageUri(url);
+    } catch {
+      Toast.show({
+        type: "error",
+        text1: "Upload failed",
+        text2: "Could not upload image. Please try again.",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handlePickImage = (): void => {
-    // Simplified image picker using alerts - in production, integrate expo-image-picker
-    Alert.alert("Upload Photo", "Select image source", [
-      {
-        text: "Sample Image",
-        onPress: () => {
-          // Use a sample image URL for now
-          setImageUri(
-            "https://via.placeholder.com/400x400?text=Proof+of+Completion",
-          );
-        },
-      },
-      {
-        text: "Cancel",
-        onPress: () => {},
-        style: "cancel",
-      },
+    Alert.alert("Add Photo", "Choose how to add your proof photo", [
+      { text: "Take Photo", onPress: () => pickImage(true) },
+      { text: "Choose from Gallery", onPress: () => pickImage(false) },
+      { text: "Cancel", style: "cancel" },
     ]);
   };
 
@@ -87,7 +141,7 @@ const UploadProof = () => {
     }
   };
 
-  const canSubmit = !!imageUri && !isSubmitting;
+  const canSubmit = !!imageUri && !isSubmitting && !uploading;
 
   if (isLoading) {
     return (
@@ -166,7 +220,22 @@ const UploadProof = () => {
             Take or upload a photo showing the completed task
           </Text>
 
-          {imageUri ? (
+          {uploading ? (
+            <View
+              style={[
+                styles.uploadArea,
+                {
+                  backgroundColor: colors.backgroundSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <LoadingSpinner size="large" />
+              <Text style={[styles.uploadSub, { color: colors.textTertiary }]}>
+                Uploading photo...
+              </Text>
+            </View>
+          ) : imageUri ? (
             <View style={styles.imagePreviewWrapper}>
               <Image
                 source={{ uri: imageUri }}
@@ -185,6 +254,7 @@ const UploadProof = () => {
               </TouchableOpacity>
             </View>
           ) : (
+            /* no image yet */
             <TouchableOpacity
               style={[
                 styles.uploadArea,
@@ -260,7 +330,7 @@ const UploadProof = () => {
             disabled={!canSubmit}
           >
             {isSubmitting ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <LoadingSpinner color="#fff" size="small" />
             ) : (
               <>
                 <CheckCircle size={18} color="#fff" />

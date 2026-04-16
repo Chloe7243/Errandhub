@@ -1,7 +1,10 @@
-import { Errand } from "../../generated/prisma";
 import { prisma } from "../lib/prisma";
-import { emitToUser, getConnectedHelpers, type ConnectedHelper } from "../lib/socket";
+import { Errand } from "../../generated/prisma";
+import { activeStatuses } from "@errandhub/shared";
+import { emitToUser, getConnectedHelpers } from "../lib/socket";
+import { notifyUser } from "../lib/notifications";
 
+// formula to calculate short distance between 2 points in km
 const haversineKm = (
   lat1: number,
   lng1: number,
@@ -25,25 +28,19 @@ type MatchingState = {
   triedHelperIds: Set<string>;
   currentHelperId?: string;
   responseTimer?: NodeJS.Timeout;
-  reviewTimer?: NodeJS.Timeout;
   offerTimer?: NodeJS.Timeout;
   pendingOfferAmount?: number;
 };
 
 const matchingState = new Map<string, MatchingState>();
 
-const FIVE_MINUTES = 5 * 60 * 1000;
-const FIFTEEN_SECONDS = 15 * 1000;
-const SIXTY_SECONDS = 60 * 1000;
+const ERRAND_REQUEST_RESPONSE_TIMER = 5 * 60 * 1000;
+const ERRAND_COUNTER_OFFER_TIMER = 60 * 1000;
 
 const clearTimers = (state: MatchingState) => {
   if (state.responseTimer) {
     clearTimeout(state.responseTimer);
     state.responseTimer = undefined;
-  }
-  if (state.reviewTimer) {
-    clearTimeout(state.reviewTimer);
-    state.reviewTimer = undefined;
   }
   if (state.offerTimer) {
     clearTimeout(state.offerTimer);
@@ -58,7 +55,7 @@ const cleanupMatchingState = (errandId: string) => {
   matchingState.delete(errandId);
 };
 
-const getSocketPayloadForErrand = async (errandId: string) => {
+const getErrand = async (errandId: string) => {
   return prisma.errand.findUnique({
     where: { id: errandId },
     include: {
@@ -74,53 +71,11 @@ const getSocketPayloadForErrand = async (errandId: string) => {
   });
 };
 
-const getHelperProfile = async (helperId: string) => {
-  const helper = await prisma.user.findUnique({
-    where: { id: helperId },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      avatarUrl: true,
-    },
-  });
-
-  if (!helper) return null;
-
-  const completedCount = await prisma.errand.count({
-    where: {
-      helperId,
-      status: "COMPLETED",
-    },
-  });
-
-  return {
-    ...helper,
-    completedCount,
-  };
-};
-
-const expireErrand = async (errandId: string) => {
-  await prisma.errand.update({
-    where: { id: errandId },
-    data: { status: "EXPIRED", helperId: null, reviewWindowExpiresAt: null },
-  });
-
-  const errand = await getSocketPayloadForErrand(errandId);
-  if (errand?.requester) {
-    emitToUser(errand.requester.id, "errand_expired", { errandId });
-  }
-
-  cleanupMatchingState(errandId);
-};
-
 const scheduleHelper = async (errandId: string) => {
   const state = matchingState.get(errandId);
   if (!state) return;
 
-  const errand = await prisma.errand.findUnique({
-    where: { id: errandId },
-  });
+  const errand = await getErrand(errandId);
 
   if (!errand || errand.status !== "POSTED") {
     cleanupMatchingState(errandId);
@@ -158,7 +113,6 @@ const scheduleHelper = async (errandId: string) => {
   });
 
   const connectedHelperIds = inRangeHelpers.map(({ userId }) => userId);
-  console.log({ availableCount: availableMap.size, connectedHelperIds });
 
   if (connectedHelperIds.length === 0) {
     await expireErrand(errandId);
@@ -168,7 +122,7 @@ const scheduleHelper = async (errandId: string) => {
   const busyHelpers = await prisma.errand.findMany({
     where: {
       helperId: { in: connectedHelperIds },
-      status: { in: ["ACCEPTED", "IN_PROGRESS", "REVIEWING"] },
+      status: { in: activeStatuses },
     },
     select: { helperId: true },
   });
@@ -184,45 +138,33 @@ const scheduleHelper = async (errandId: string) => {
     return;
   }
 
-  const nextHelperId =
+  const newHelperId =
     eligibleHelpers[Math.floor(Math.random() * eligibleHelpers.length)];
-  state.currentHelperId = nextHelperId;
+  state.currentHelperId = newHelperId;
 
-  const errandDetails = await prisma.errand.findUnique({
-    where: { id: errandId },
-    include: {
-      requester: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          avatarUrl: true,
-        },
-      },
-    },
-  });
-
-  if (!errandDetails || !errandDetails.requester) {
+  if (!errand || !errand.requester) {
     await expireErrand(errandId);
     return;
   }
 
-  emitToUser(nextHelperId, "errand_request", {
-    errandId: errandDetails.id,
-    title: errandDetails.title,
-    description: errandDetails.description,
-    pickupLocation: errandDetails.pickupLocation,
-    dropoffLocation: errandDetails.dropoffLocation,
-    pickupReference: errandDetails.pickupReference,
-    suggestedPrice: errandDetails.suggestedPrice ?? 0,
-    type: errandDetails.type,
+  emitToUser(newHelperId, "errand_request", {
+    errandId: errand.id,
+    title: errand.title,
+    description: errand.description,
+    pickupLocation: errand.pickupLocation,
+    dropoffLocation: errand.dropoffLocation,
+    pickupReference: errand.pickupReference,
+    suggestedPrice: errand.suggestedPrice ?? 0,
+    type: errand.type,
     requester: {
-      id: errandDetails.requester.id,
-      firstName: errandDetails.requester.firstName,
-      lastName: errandDetails.requester.lastName,
-      avatarUrl: errandDetails.requester.avatarUrl,
+      id: errand.requester.id,
+      firstName: errand.requester.firstName,
+      lastName: errand.requester.lastName,
+      avatarUrl: errand.requester.avatarUrl,
     },
-    expiresAt: new Date(Date.now() + FIVE_MINUTES).toISOString(),
+    expiresAt: new Date(
+      Date.now() + ERRAND_REQUEST_RESPONSE_TIMER,
+    ).toISOString(),
   });
 
   state.responseTimer = setTimeout(() => {
@@ -231,50 +173,47 @@ const scheduleHelper = async (errandId: string) => {
     }
     state.currentHelperId = undefined;
     scheduleHelper(errandId);
-  }, FIVE_MINUTES);
+  }, ERRAND_REQUEST_RESPONSE_TIMER);
 };
 
-const sendReviewWindow = async (
-  errandId: string,
-  helperId: string,
-  agreedPrice: number,
-) => {
-  const helperProfile = await getHelperProfile(helperId);
-  if (!helperProfile) return;
-
-  await prisma.errand.update({
-    where: { id: errandId },
-    data: {
-      status: "TENTATIVELY_ACCEPTED",
-      helperId,
-      agreedPrice,
-      reviewWindowExpiresAt: new Date(Date.now() + FIFTEEN_SECONDS),
-      consecutiveCancels: 0,
+const getHelperProfile = async (helperId: string) => {
+  const helper = await prisma.user.findUnique({
+    where: { id: helperId },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      avatarUrl: true,
     },
   });
 
-  const errand = await getSocketPayloadForErrand(errandId);
-  if (!errand?.requester) {
-    cleanupMatchingState(errandId);
-    return;
-  }
+  if (!helper) return null;
 
-  emitToUser(errand.requester.id, "review_window", {
-    errandId,
-    helper: helperProfile,
-    agreedPrice,
-    expiresAt: new Date(Date.now() + FIFTEEN_SECONDS).toISOString(),
+  const completedCount = await prisma.errand.count({
+    where: {
+      helperId,
+      status: "COMPLETED",
+    },
   });
 
-  const state = matchingState.get(errandId);
-  if (!state) return;
-  if (state.responseTimer) {
-    clearTimeout(state.responseTimer);
-    state.responseTimer = undefined;
+  return {
+    ...helper,
+    completedCount,
+  };
+};
+
+const expireErrand = async (errandId: string) => {
+  await prisma.errand.update({
+    where: { id: errandId },
+    data: { status: "EXPIRED", helperId: null },
+  });
+
+  const errand = await getErrand(errandId);
+  if (errand?.requester) {
+    emitToUser(errand.requester.id, "errand_expired", { errandId });
   }
-  state.reviewTimer = setTimeout(() => {
-    confirmHelper(errandId);
-  }, FIFTEEN_SECONDS);
+
+  cleanupMatchingState(errandId);
 };
 
 export const startErrandMatching = async (
@@ -302,7 +241,7 @@ export const helperAcceptErrand = async (
   if (!errand || errand.status !== "POSTED") return;
 
   clearTimers(state);
-  await sendReviewWindow(errandId, helperId, errand.suggestedPrice ?? 0);
+  confirmHelper(errandId);
 };
 
 export const helperCounterOffer = async (
@@ -338,10 +277,10 @@ export const helperCounterOffer = async (
     }
     state.currentHelperId = undefined;
     scheduleHelper(errandId);
-  }, SIXTY_SECONDS);
+  }, ERRAND_COUNTER_OFFER_TIMER);
 
   const helperProfile = await getHelperProfile(helperId);
-  const errandDetails = await getSocketPayloadForErrand(errandId);
+  const errandDetails = await getErrand(errandId);
   if (!helperProfile || !errandDetails?.requester) {
     return;
   }
@@ -350,7 +289,13 @@ export const helperCounterOffer = async (
     errandId,
     helper: helperProfile,
     amount,
-    expiresAt: new Date(Date.now() + SIXTY_SECONDS).toISOString(),
+    expiresAt: new Date(Date.now() + ERRAND_COUNTER_OFFER_TIMER).toISOString(),
+  });
+
+  await notifyUser(errandDetails.requester.id, {
+    title: "Counter offer received 💬",
+    body: `${helperProfile.firstName} offered £${amount.toFixed(2)} for your errand`,
+    data: { errandId },
   });
 };
 
@@ -368,14 +313,18 @@ export const requestOfferResponse = async (
 
   if (accept) {
     const amount = state.pendingOfferAmount ?? 0;
-    await sendReviewWindow(errandId, state.currentHelperId, amount);
+    confirmHelper(errandId, amount);
     state.pendingOfferAmount = undefined;
     return;
   }
 
-  state.triedHelperIds.add(state.currentHelperId);
+  const rejectedHelperId = state.currentHelperId;
+  state.triedHelperIds.add(rejectedHelperId);
   state.currentHelperId = undefined;
   state.pendingOfferAmount = undefined;
+
+  emitToUser(rejectedHelperId, "offer_rejected", { errandId });
+
   await scheduleHelper(errandId);
 };
 
@@ -396,67 +345,41 @@ export const helperDeclineErrand = async (
   await scheduleHelper(errandId);
 };
 
-export const confirmHelper = async (errandId: string) => {
+export const confirmHelper = async (errandId: string, amount?: number) => {
   const state = matchingState.get(errandId);
+
+  console.log({ state });
   if (!state || !state.currentHelperId) return;
 
   const errand = await prisma.errand.findUnique({ where: { id: errandId } });
-  if (!errand || errand.status !== "TENTATIVELY_ACCEPTED") {
+  console.log({ errand });
+  if (!errand || errand.status !== "POSTED") {
+    expireErrand(errandId);
     cleanupMatchingState(errandId);
     return;
-  }
-
-  if (state.reviewTimer) {
-    clearTimeout(state.reviewTimer);
-    state.reviewTimer = undefined;
   }
 
   const updated = await prisma.errand.update({
     where: { id: errandId },
     data: {
-      status: "ACCEPTED",
-      reviewWindowExpiresAt: null,
-      consecutiveCancels: 0,
+      helperId: state.currentHelperId,
+      agreedPrice: amount ?? errand.suggestedPrice ?? 0,
+      status: "IN_PROGRESS",
     },
   });
 
   emitToUser(state.currentHelperId, "errand_assigned", {
     errandId: updated.id,
   });
+  emitToUser(state.requesterId, "errand_assigned", {
+    errandId: updated.id,
+  });
+
+  await notifyUser(state.requesterId, {
+    title: "Helper found! 🎉",
+    body: `A helper has accepted your errand: ${errand.title}`,
+    data: { errandId },
+  });
 
   cleanupMatchingState(errandId);
-};
-
-export const cancelReview = async (errandId: string) => {
-  const state = matchingState.get(errandId);
-  if (!state || !state.currentHelperId) return;
-
-  const errand = await prisma.errand.findUnique({ where: { id: errandId } });
-  if (!errand || errand.status !== "TENTATIVELY_ACCEPTED") return;
-
-  if (state.reviewTimer) {
-    clearTimeout(state.reviewTimer);
-    state.reviewTimer = undefined;
-  }
-
-  await prisma.errand.update({
-    where: { id: errandId },
-    data: {
-      status: "POSTED",
-      helperId: null,
-      reviewWindowExpiresAt: null,
-      consecutiveCancels: {
-        increment: 1,
-      },
-    },
-  });
-
-  emitToUser(state.currentHelperId, "match_unavailable", {
-    errandId,
-    message: "The requester cancelled",
-  });
-
-  state.triedHelperIds.add(state.currentHelperId);
-  state.currentHelperId = undefined;
-  await scheduleHelper(errandId);
 };

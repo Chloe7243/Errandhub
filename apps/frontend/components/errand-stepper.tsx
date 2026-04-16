@@ -14,7 +14,6 @@ const STEPS: ErrandStatus[] = [
 
 const LABELS: Record<ErrandStatus, string> = {
   POSTED: "Posted",
-  TENTATIVELY_ACCEPTED: "Pending Review",
   ACCEPTED: "Accepted",
   IN_PROGRESS: "In Progress",
   REVIEWING: "Reviewing",

@@ -3,8 +3,6 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Ionicons } from "@expo/vector-icons";
 import { useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -16,13 +14,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import LoadingSpinner from "./loading-spinner";
 
 export type LocationCoords = { lat: number; lng: number };
 
 type AddressFields = {
   line1: string;
   line2: string;
-  city: string;
+  area: string;
   postcode: string;
 };
 
@@ -41,54 +40,30 @@ type Props = {
   error?: string;
 };
 
-// ─── API ─────────────────────────────────────────────────────────────────────
-// Replace the body of this function with your chosen address search API.
-const searchAddresses = async (query: string): Promise<SearchResult[]> => {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&countrycodes=gb&format=json&addressdetails=1&limit=6`;
-  const res = await fetch(url, { headers: { "Accept-Language": "en-GB" } });
-  const data = await res.json();
-  return data.map((item: any) => {
-    const a = item.address ?? {};
-    const street = [a.house_number, a.road].filter(Boolean).join(" ");
-    const area = a.suburb ?? a.neighbourhood ?? a.quarter ?? "";
-    const locality = a.city ?? a.town ?? a.village ?? "";
-    const parts = [street || undefined, area || undefined, locality || undefined, a.postcode].filter(Boolean);
-    const label =
-      parts.length >= 2
-        ? parts.join(", ")
-        : item.display_name.split(",").slice(0, 4).map((s: string) => s.trim()).join(", ");
-
-    return {
-      label,
-      coords: { lat: parseFloat(item.lat), lng: parseFloat(item.lon) },
-      fields: { line1: street, line2: area, city: locality, postcode: a.postcode ?? "" },
-    };
-  });
+const EMPTY: AddressFields = {
+  line1: "",
+  line2: "",
+  area: "",
+  postcode: "",
 };
-// ─────────────────────────────────────────────────────────────────────────────
-
-const composeAddress = (f: AddressFields) =>
-  [f.line1, f.line2, f.city, f.postcode].filter(Boolean).join(", ");
-
-const EMPTY: AddressFields = { line1: "", line2: "", city: "", postcode: "" };
 
 const FIELDS_CONFIG = [
   {
     key: "line1" as const,
-    label: "House No. / Building & Street",
-    placeholder: "e.g. 12 Baker Street",
+    label: "Address Line 1",
+    placeholder: "e.g. Flat 99, 169 Netherkirkgate",
     autoCapitalize: "words" as const,
   },
   {
     key: "line2" as const,
-    label: "Area / Suburb (optional)",
-    placeholder: "e.g. City Centre",
+    label: "Address Line 2 (optional)",
+    placeholder: "e.g. Business Park",
     autoCapitalize: "words" as const,
   },
   {
-    key: "city" as const,
-    label: "City / Town",
-    placeholder: "e.g. Coventry",
+    key: "area" as const,
+    label: "Area (optional)",
+    placeholder: "e.g. City Centre",
     autoCapitalize: "words" as const,
   },
   {
@@ -98,6 +73,48 @@ const FIELDS_CONFIG = [
     autoCapitalize: "characters" as const,
   },
 ];
+
+const EASY_POSTCODE_API_KEY =
+  process.env.EXPO_PUBLIC_EASY_POSTCODE_API_KEY ?? "";
+
+const toTitleCase = (str: string) =>
+  str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+const searchAddresses = async (postcode: string): Promise<SearchResult[]> => {
+  const url = `https://api.easypostcodes.com/addresses/${encodeURIComponent(postcode)}?includeGeo=true`;
+  const res = await fetch(url, {
+    headers: { Key: EASY_POSTCODE_API_KEY },
+  });
+  if (!res.ok) throw new Error("Invalid postcode or no addresses found.");
+  const addresses: any[] = (await res.json()) ?? [];
+  if (addresses.length === 0)
+    throw new Error("No addresses found for that postcode.");
+
+  return addresses.map((a) => {
+    const line1 = toTitleCase(a.envelopeAddress?.addressLine1 || "");
+    const line2 = toTitleCase(a.envelopeAddress?.addressLine2 || "");
+    const area = toTitleCase(a.postTown ?? "");
+    const postcode = a.postCode ?? "";
+    const lat = parseFloat(a.latitude);
+    const lng = parseFloat(a.longitude);
+
+    return {
+      label:
+        a.envelopeAddress?.summaryLine ??
+        [line2, area, postcode].filter(Boolean).join(", "),
+      coords: !isNaN(lat) && !isNaN(lng) ? { lat, lng } : undefined,
+      fields: {
+        line1,
+        line2,
+        area,
+        postcode,
+      },
+    };
+  });
+};
+
+const composeAddress = (f: AddressFields) =>
+  [f.line1, f.line2, f.area, f.postcode].filter(Boolean).join(", ");
 
 const AddressPicker = ({
   label,
@@ -114,13 +131,17 @@ const AddressPicker = ({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [fields, setFields] = useState<AddressFields>(EMPTY);
-  const [pendingCoords, setPendingCoords] = useState<LocationCoords | undefined>();
+  const [pendingCoords, setPendingCoords] = useState<
+    LocationCoords | undefined
+  >();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleOpen = () => {
     setQuery("");
     setResults([]);
+    setSearchError(null);
     setFields(EMPTY);
     setPendingCoords(undefined);
     setOpen(true);
@@ -128,6 +149,7 @@ const AddressPicker = ({
 
   const handleSearch = (text: string) => {
     setQuery(text);
+    setSearchError(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (text.trim().length < 3) {
       setResults([]);
@@ -137,12 +159,15 @@ const AddressPicker = ({
       setSearching(true);
       try {
         setResults(await searchAddresses(text));
-      } catch {
+      } catch (err: any) {
+        setSearchError(
+          err?.message ?? "Could not find addresses for that postcode.",
+        );
         setResults([]);
       } finally {
         setSearching(false);
       }
-    }, 500);
+    }, 1500);
   };
 
   const handlePickResult = (result: SearchResult) => {
@@ -163,12 +188,11 @@ const AddressPicker = ({
     setOpen(false);
   };
 
-  const canConfirm = !!(fields.line1 || fields.city || fields.postcode);
+  const canConfirm = !!(fields.line1 || fields.postcode);
   const preview = composeAddress(fields);
 
   return (
     <>
-      {/* ── Trigger ── */}
       <View style={styles.container}>
         {label && (
           <Text style={[styles.label, { color: colors.textSecondary }]}>
@@ -259,19 +283,20 @@ const AddressPicker = ({
                 <TextInput
                   value={query}
                   onChangeText={handleSearch}
-                  placeholder="Search for your address..."
+                  placeholder="Enter postcode e.g. CV1 2JH"
                   placeholderTextColor={colors.textTertiary}
                   style={[styles.searchInput, { color: colors.text }]}
                   autoFocus
                   autoCorrect={false}
                 />
                 {searching ? (
-                  <ActivityIndicator size="small" color={colors.primary} />
+                  <LoadingSpinner size="small" color={colors.primary} />
                 ) : query.length > 0 ? (
                   <TouchableOpacity
                     onPress={() => {
                       setQuery("");
                       setResults([]);
+                      setSearchError(null);
                     }}
                   >
                     <Ionicons
@@ -282,6 +307,13 @@ const AddressPicker = ({
                   </TouchableOpacity>
                 ) : null}
               </View>
+
+              {/* Search error */}
+              {searchError && (
+                <Text style={[styles.searchError, { color: colors.error }]}>
+                  {searchError}
+                </Text>
+              )}
 
               {/* Search results */}
               {results.length > 0 && (
@@ -332,10 +364,7 @@ const AddressPicker = ({
                   ]}
                 />
                 <Text
-                  style={[
-                    styles.dividerLabel,
-                    { color: colors.textTertiary },
-                  ]}
+                  style={[styles.dividerLabel, { color: colors.textTertiary }]}
                 >
                   address details
                 </Text>
@@ -347,7 +376,6 @@ const AddressPicker = ({
                 />
               </View>
 
-              {/* Manual fields */}
               {FIELDS_CONFIG.map((f) => (
                 <View key={f.key} style={styles.fieldGroup}>
                   <Text
@@ -464,6 +492,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   searchInput: { flex: 1, fontSize: 15 },
+  searchError: { fontSize: 12, marginTop: -6 },
 
   // Results
   results: {

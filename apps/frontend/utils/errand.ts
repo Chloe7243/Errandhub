@@ -11,7 +11,6 @@ export const formatErrandType = (type: ErrandType): string => {
 export const formatErrandStatus = (status: ErrandStatus): string => {
   const labels: Record<ErrandStatus, string> = {
     POSTED: "Posted",
-    TENTATIVELY_ACCEPTED: "Reviewing",
     ACCEPTED: "Accepted",
     IN_PROGRESS: "In Progress",
     REVIEWING: "Reviewing",

@@ -2,9 +2,10 @@ import { prisma } from "../lib/prisma";
 import { AuthRequest } from "../types/auth";
 import { AppError } from "../middleware/errors";
 import { Response, NextFunction } from "express";
-import { createErrandSchema } from "@errandhub/shared";
+import { activeStatuses, createErrandSchema } from "@errandhub/shared";
 import { startErrandMatching } from "../services/matching";
 import { emitToUser } from "../lib/socket";
+import { notifyUser } from "../lib/notifications";
 
 export const createErrand = async (
   req: AuthRequest,
@@ -33,7 +34,7 @@ export const createErrand = async (
       where: {
         requesterId: req.userId!,
         status: {
-          in: ["POSTED", "TENTATIVELY_ACCEPTED", "ACCEPTED", "IN_PROGRESS", "REVIEWING"],
+          in: activeStatuses,
         },
       },
     });
@@ -286,10 +287,14 @@ export const acceptErrand = async (
     const updated = await prisma.errand.update({
       where: { id: req.params.id },
       data: {
-        status: "ACCEPTED",
+        status: "IN_PROGRESS",
         helperId: req.userId,
         agreedPrice: errand.suggestedPrice,
       },
+    });
+
+    emitToUser(errand.requesterId, "errand_assigned", {
+      errandId: updated.id,
     });
 
     res.json({ errand: updated });
@@ -311,9 +316,7 @@ export const updateErrandStatus = async (
     if (!errand) throw new AppError("Errand not found", 404);
 
     const allowedTransitions: Record<string, string[]> = {
-      POSTED: ["TENTATIVELY_ACCEPTED", "CANCELLED", "EXPIRED"],
-      TENTATIVELY_ACCEPTED: ["ACCEPTED", "POSTED"],
-      ACCEPTED: ["IN_PROGRESS", "CANCELLED"],
+      POSTED: ["CANCELLED", "EXPIRED"],
       IN_PROGRESS: ["REVIEWING", "CANCELLED"],
       REVIEWING: ["COMPLETED", "DISPUTED"],
     };
@@ -364,11 +367,84 @@ export const updateErrandStatus = async (
       emitToUser(updatedErrand.requesterId, "proof_submitted", {
         errandId: updatedErrand.id,
       });
+      await notifyUser(updatedErrand.requesterId, {
+        title: "Proof submitted 📸",
+        body: "Your helper has marked the errand complete. Please review.",
+        data: { errandId: updatedErrand.id },
+      });
+    }
+
+    if (status === "COMPLETED" && updatedErrand.helperId) {
+      emitToUser(updatedErrand.helperId, "errand_completed", {
+        errandId: updatedErrand.id,
+      });
+      await notifyUser(updatedErrand.helperId, {
+        title: "Payment released 💸",
+        body: "The requester confirmed your errand. Great work!",
+        data: { errandId: updatedErrand.id },
+      });
     }
 
     res
       .status(200)
       .json({ errand: updatedErrand, message: "Errand status updated" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const raiseDispute = async (
+  req: AuthRequest<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id } = req.params;
+    const { reason, explanation, evidenceImageUrl } = req.body;
+
+    if (!reason || !explanation) {
+      throw new AppError("reason and explanation are required", 400);
+    }
+
+    const errand = await prisma.errand.findUnique({ where: { id } });
+    if (!errand) throw new AppError("Errand not found", 404);
+    if (errand.status !== "REVIEWING")
+      throw new AppError(
+        "Dispute can only be raised while the errand is under review",
+        400,
+      );
+    if (errand.requesterId !== req.userId)
+      throw new AppError("Only the requester can raise a dispute", 403);
+
+    const dispute = await prisma.$transaction(async (tx) => {
+      const created = await tx.dispute.create({
+        data: {
+          errandId: id,
+          raisedById: req.userId!,
+          reason,
+          explanation,
+          evidenceImageUrl,
+        },
+      });
+
+      await tx.errand.update({
+        where: { id },
+        data: { status: "DISPUTED" },
+      });
+
+      return created;
+    });
+
+    if (errand.helperId) {
+      await notifyUser(errand.helperId, {
+        title: "Dispute raised",
+        body: "The requester has raised a dispute on your errand.",
+        data: { errandId: id },
+      });
+      emitToUser(errand.helperId, "errand_disputed", { errandId: id });
+    }
+
+    res.status(201).json({ dispute });
   } catch (error) {
     next(error);
   }

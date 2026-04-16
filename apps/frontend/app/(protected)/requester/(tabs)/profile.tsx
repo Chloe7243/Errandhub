@@ -1,20 +1,22 @@
 import Avatar from "@/components/avatar";
 import EmptyState from "@/components/empty-state";
+import SwitchRole from "@/components/switch-role";
 import ExpandableSection from "@/components/ui/expandable-section";
 import Input from "@/components/ui/input";
 import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useAppDispatch } from "@/store/hooks";
+import { useThemePreference } from "@/hooks/use-theme-preference";
 import {
   useGetRequestedErrandsQuery,
   useGetUserDetailsQuery,
 } from "@/store/api/user";
+import { useAppDispatch } from "@/store/hooks";
 import { logoutUser } from "@/store/slices";
+import { ThemePreference } from "@/store/slices/theme";
+import { activeStatuses } from "@errandhub/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
-import { useThemePreference } from "@/hooks/use-theme-preference";
-import { ThemePreference } from "@/store/slices/theme";
 import {
   Alert,
   ScrollView,
@@ -24,7 +26,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import SwitchRole from "@/components/switch-role";
 
 type Section =
   | null
@@ -57,13 +58,7 @@ const Profile = () => {
   } = useGetUserDetailsQuery(null);
 
   const { data: activeErrandsData } = useGetRequestedErrandsQuery({
-    status: [
-      "POSTED",
-      "TENTATIVELY_ACCEPTED",
-      "ACCEPTED",
-      "IN_PROGRESS",
-      "REVIEWING",
-    ] as any,
+    status: activeStatuses,
   });
 
   const user = data?.user;

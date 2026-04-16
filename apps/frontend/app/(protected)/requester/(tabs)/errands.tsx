@@ -1,10 +1,11 @@
-import ErrandCard from "@/components/errand-card";
 import EmptyState from "@/components/empty-state";
+import ErrandCard from "@/components/errand-card";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useGetRequestedErrandsQuery } from "@/store/api/user";
-import { ErrandStatus } from "@errandhub/shared";
 import { formatErrandStatus } from "@/utils/errand";
+import { ErrandStatus } from "@errandhub/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -17,7 +18,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import LoadingSpinner from "@/components/ui/loading-spinner";
 
 type Filter = "ALL" | ErrandStatus;
 
@@ -66,9 +66,7 @@ const ErrandHistory = () => {
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <Text style={[styles.title, { color: colors.text }]}>
-        Errand History
-      </Text>
+      <Text style={[styles.title, { color: colors.text }]}>Errand History</Text>
 
       {/* Search */}
       <View
@@ -180,7 +178,6 @@ export default ErrandHistory;
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 16,
     gap: 16,

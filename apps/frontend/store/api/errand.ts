@@ -109,6 +109,18 @@ const errandApi = api.injectEndpoints({
         { type: TAGS.ERRAND, id: errandId },
       ],
     }),
+
+    raiseDispute: build.mutation({
+      query: ({ errandId, ...body }: { errandId: string; reason: string; explanation: string; evidenceImageUrl?: string }) => ({
+        url: `/errand/${errandId}/dispute`,
+        method: "POST",
+        body,
+      }),
+      invalidatesTags: (result, error, { errandId }) => [
+        TAGS.REQUESTED_ERRANDS,
+        { type: TAGS.ERRAND, id: errandId },
+      ],
+    }),
   }),
 });
 
@@ -121,4 +133,5 @@ export const {
   useDeclineOfferMutation,
   useAcceptErrandMutation,
   useUpdateErrandStatusMutation,
+  useRaiseDisputeMutation,
 } = errandApi;

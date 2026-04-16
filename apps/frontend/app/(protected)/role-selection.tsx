@@ -41,7 +41,6 @@ const RoleSelection = () => {
           userId: user.userId,
           role: isSelected,
         }).unwrap();
-        console.log("Role selection response:", response);
         dispatch(
           loginUser({
             user: response.user,

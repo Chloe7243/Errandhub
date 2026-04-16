@@ -34,7 +34,17 @@ const ReviewCompletion = () => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const router = useRouter();
-  const [autoConfirmCountdown, setAutoConfirmCountdown] = useState<number>(300); // 5 minutes in seconds
+  const REVIEW_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
+  const getRemainingSeconds = () => {
+    if (!errand?.updatedAt) return REVIEW_WINDOW_MS / 1000;
+    const elapsed = Date.now() - new Date(errand.updatedAt).getTime();
+    return Math.max(0, Math.ceil((REVIEW_WINDOW_MS - elapsed) / 1000));
+  };
+
+  const [autoConfirmCountdown, setAutoConfirmCountdown] = useState<number>(
+    () => getRemainingSeconds(),
+  );
 
   const handleAutoConfirm = useCallback(async () => {
     if (!errand) return;
@@ -77,24 +87,31 @@ const ReviewCompletion = () => {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Auto-confirm after 5 minutes if user hasn't manually confirmed
+  // Auto-confirm after 5 minutes if user hasn't manually confirmed.
+  // Seed from errand.updatedAt so the countdown survives navigation.
   useEffect(() => {
     if (!errand || errand.status !== "REVIEWING") return;
 
+    // Sync to real remaining time whenever errand data arrives
+    const initial = getRemainingSeconds();
+    setAutoConfirmCountdown(initial);
+
+    if (initial <= 0) {
+      handleAutoConfirm();
+      return;
+    }
+
     const timer = setInterval(() => {
-      setAutoConfirmCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          // Auto-confirm
-          handleAutoConfirm();
-          return 0;
-        }
-        return prev - 1;
-      });
+      const remaining = getRemainingSeconds();
+      setAutoConfirmCountdown(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+        handleAutoConfirm();
+      }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [errand, handleAutoConfirm]);
+  }, [errand?.updatedAt, errand?.status, handleAutoConfirm]);
 
   if (isLoading) {
     return (

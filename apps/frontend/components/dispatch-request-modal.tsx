@@ -40,7 +40,6 @@ const DispatchRequestModal = ({
     setIsNegotiationOpen(false);
   }, [helperRequest]);
 
-  // Countdown text — updates every second
   useEffect(() => {
     if (!helperRequest) return;
 
@@ -63,7 +62,6 @@ const DispatchRequestModal = ({
     return () => clearInterval(interval);
   }, [helperRequest]);
 
-  // Animated shrinking bar — runs for the full duration once
   useEffect(() => {
     if (!helperRequest) return;
     const remaining = new Date(helperRequest.expiresAt).getTime() - Date.now();
@@ -75,6 +73,7 @@ const DispatchRequestModal = ({
     });
     anim.start();
     return () => anim.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [helperRequest]);
 
   if (!helperRequest) return null;
@@ -163,9 +162,7 @@ const DispatchRequestModal = ({
                 ]}
                 onPress={() => setIsNegotiationOpen(true)}
               >
-                <Text
-                  style={[styles.modalButtonText, { color: colors.text }]}
-                >
+                <Text style={[styles.modalButtonText, { color: colors.text }]}>
                   Negotiate
                 </Text>
               </TouchableOpacity>
@@ -289,9 +286,7 @@ const DispatchRequestModal = ({
                 ]}
                 onPress={() => setIsNegotiationOpen(false)}
               >
-                <Text
-                  style={[styles.modalButtonText, { color: colors.text }]}
-                >
+                <Text style={[styles.modalButtonText, { color: colors.text }]}>
                   Back
                 </Text>
               </TouchableOpacity>

@@ -8,6 +8,7 @@ import {
   requestOfferResponse,
 } from "../services/matching";
 import { prisma } from "./prisma";
+import { notifyUser } from "./notifications";
 
 let io: Server | null = null;
 
@@ -38,7 +39,6 @@ export const initSocket = (httpServer: HttpServer) => {
         userId: string;
         role: string;
       };
-      console.log("Socket", { decoded });
       socket.data.userId = decoded.userId;
       socket.data.role = decoded.role;
       next();
@@ -84,8 +84,6 @@ export const initSocket = (httpServer: HttpServer) => {
           createdAt: new Date().toISOString(),
         };
 
-        // Deliver to both participants directly so the message arrives even
-        // when the other person isn't in the chat room.
         const errand = await prisma.errand.findUnique({
           where: { id: errandId },
           select: { requesterId: true, helperId: true },
@@ -95,6 +93,30 @@ export const initSocket = (httpServer: HttpServer) => {
           emitToUser(errand.requesterId, "receive_message", message);
           if (errand.helperId) {
             emitToUser(errand.helperId, "receive_message", message);
+          }
+
+          const recipientId =
+            userId === errand.requesterId
+              ? errand.helperId
+              : errand.requesterId;
+
+          if (recipientId) {
+            const sender = await prisma.user.findUnique({
+              where: { id: userId },
+              select: { firstName: true },
+            });
+            const senderName = sender?.firstName ?? "Someone";
+            const preview = content
+              ? content.length > 60
+                ? content.slice(0, 57) + "..."
+                : content
+              : "📷 Sent an image";
+
+            await notifyUser(recipientId, {
+              title: `${senderName} sent a message`,
+              body: preview,
+              data: { type: "message", errandId },
+            });
           }
         } else {
           // Fallback: broadcast to room

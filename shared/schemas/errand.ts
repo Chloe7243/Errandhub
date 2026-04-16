@@ -2,7 +2,6 @@ import { z } from "zod";
 
 export const errandStatusEnum = z.enum([
   "POSTED",
-  "TENTATIVELY_ACCEPTED",
   "ACCEPTED",
   "IN_PROGRESS",
   "REVIEWING",
@@ -10,7 +9,6 @@ export const errandStatusEnum = z.enum([
   "CANCELLED",
   "EXPIRED",
   "DISPUTED",
-  "EXPIRED",
 ]);
 export const errandTypeEnum = z.enum(["PICKUP_DELIVERY", "SHOPPING"]);
 

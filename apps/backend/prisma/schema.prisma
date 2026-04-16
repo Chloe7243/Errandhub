@@ -14,7 +14,6 @@ datasource db {
 
 enum ErrandStatus {
   POSTED
-  TENTATIVELY_ACCEPTED
   ACCEPTED
   IN_PROGRESS
   REVIEWING
@@ -70,6 +69,7 @@ model User {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   role              String?
+  expoPushToken     String?
   resetToken        String?
   verificationToken String?
   resetTokenExpiry  DateTime?
@@ -197,15 +197,16 @@ model PaymentTransaction {
 // }
 
 model Dispute {
-  id          String        @id @default(cuid())
-  errandId    String        @unique
-  raisedById  String
-  reason      String
-  explanation String
-  status      DisputeStatus @default(OPEN)
-  resolution  String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id               String        @id @default(cuid())
+  errandId         String        @unique
+  raisedById       String
+  reason           String
+  explanation      String
+  evidenceImageUrl String?
+  status           DisputeStatus @default(OPEN)
+  resolution       String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   errand   Errand @relation(fields: [errandId], references: [id])
   raisedBy User   @relation("RaisedDisputes", fields: [raisedById], references: [id])

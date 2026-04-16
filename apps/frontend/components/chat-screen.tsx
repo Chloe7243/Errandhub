@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 // components/chat-screen.tsx
 import Avatar from "@/components/avatar";
 import BackButton from "@/components/ui/back-button";
@@ -37,7 +38,11 @@ type ChatScreenProps = {
   otherPersonPhone?: string;
 };
 
-const ChatScreen = ({ errandId, otherPersonName, otherPersonPhone }: ChatScreenProps) => {
+const ChatScreen = ({
+  errandId,
+  otherPersonName,
+  otherPersonPhone,
+}: ChatScreenProps) => {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const flatListRef = useRef<FlatList>(null);
@@ -176,8 +181,17 @@ const ChatScreen = ({ errandId, otherPersonName, otherPersonPhone }: ChatScreenP
               </View>
             </View>
             <TouchableOpacity
-              style={[styles.call, { backgroundColor: otherPersonPhone ? colors.primary : colors.border }]}
-              onPress={() => otherPersonPhone && Linking.openURL(`tel:${otherPersonPhone}`)}
+              style={[
+                styles.call,
+                {
+                  backgroundColor: otherPersonPhone
+                    ? colors.primary
+                    : colors.border,
+                },
+              ]}
+              onPress={() =>
+                otherPersonPhone && Linking.openURL(`tel:${otherPersonPhone}`)
+              }
               disabled={!otherPersonPhone}
             >
               <Ionicons name="call-outline" size={22} color="#fff" />

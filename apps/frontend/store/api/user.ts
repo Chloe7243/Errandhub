@@ -11,19 +11,39 @@ const usersApi = api.injectEndpoints({
       }),
       providesTags: [TAGS.USER],
     }),
-    getRequestedErrands: builder.query({
-      query: ({ status }: { status?: ErrandStatus | ErrandStatus[] }) => ({
+    getRequestedErrands: builder.query<
+      {
+        errands: any[];
+        summary: {
+          totalActive: number;
+          totalCompleted: number;
+          totalErrands: number;
+        };
+      },
+      { status?: ErrandStatus | ErrandStatus[] } | void
+    >({
+      query: (arg) => ({
         url: `user/requested-errands`,
         method: "GET",
-        params: status ? { status } : undefined,
+        params: arg?.status ? { status: arg.status } : undefined,
       }),
       providesTags: [TAGS.REQUESTED_ERRANDS],
     }),
-    getHelpedErrands: builder.query({
-      query: ({ status }: { status?: ErrandStatus | ErrandStatus[] }) => ({
+    getHelpedErrands: builder.query<
+      {
+        errands: any[];
+        summary: {
+          totalEarned: number;
+          totalCompleted: number;
+          totalDisputed: number;
+        };
+      },
+      { status?: ErrandStatus | ErrandStatus[] } | void
+    >({
+      query: (arg) => ({
         url: `user/helped-errands`,
         method: "GET",
-        params: status ? { status } : undefined,
+        params: arg?.status ? { status: arg.status } : undefined,
       }),
       providesTags: [TAGS.HELPED_ERRANDS],
     }),
@@ -39,6 +59,13 @@ const usersApi = api.injectEndpoints({
       }),
       invalidatesTags: [TAGS.USER_SETTINGS],
     }),
+    savePushToken: builder.mutation<void, string>({
+      query: (token) => ({
+        url: "user/push-token",
+        method: "POST",
+        body: { token },
+      }),
+    }),
   }),
 });
 
@@ -48,4 +75,5 @@ export const {
   useGetHelpedErrandsQuery,
   useUpdateSettingsMutation,
   useGetRequestedErrandsQuery,
+  useSavePushTokenMutation,
 } = usersApi;

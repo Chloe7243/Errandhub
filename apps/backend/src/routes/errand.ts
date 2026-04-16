@@ -6,6 +6,7 @@ import {
   declineOffer,
   getErrandById,
   getPostedErrands,
+  raiseDispute,
   submitOffer,
   updateErrandStatus,
 } from "../controllers/errand";
@@ -23,5 +24,6 @@ router.post("/:id/offers", requireRole("helper"), submitOffer);
 router.patch("/:id/offers/:offerId/decline", requireRole("requester"), declineOffer);
 router.patch("/:id/offers/:offerId/accept", requireRole("requester"), acceptOffer);
 router.patch("/:id/status", updateErrandStatus);
+router.post("/:id/dispute", requireRole("requester"), raiseDispute);
 
 export default router;

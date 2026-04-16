@@ -8,10 +8,10 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
   useGetErrandByIdQuery,
   useSubmitOfferMutation,
-  useUpdateErrandStatusMutation,
   useAcceptErrandMutation,
 } from "@/store/api/errand";
 import { formatErrandType, formatErrandStatus } from "@/utils/errand";
+import { STATUS_COLORS } from "@/utils/constants";
 import { displayErrorMessage } from "@/utils/errors";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -28,7 +28,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
-import { useAppDispatch } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  toggleItem,
+  clearProgress,
+  parseChecklist,
+} from "@/store/slices/checklist";
 
 const HelperErrandDetails = () => {
   const router = useRouter();
@@ -48,19 +53,22 @@ const HelperErrandDetails = () => {
     refetchOnMountOrArgChange: true,
   });
   const [submitOffer, { isLoading: isSubmitting }] = useSubmitOfferMutation();
-  const [updateStatus, { isLoading: isUpdating }] =
-    useUpdateErrandStatusMutation();
   const [acceptErrand, { isLoading: isAccepting }] = useAcceptErrandMutation();
 
   const errand = data?.errand;
   const isPosted = errand?.status === "POSTED";
-  const isActive =
-    errand?.status === "IN_PROGRESS" || errand?.status === "ACCEPTED";
+  const isActive = errand?.status === "IN_PROGRESS";
   const hasOffer = errand?.offers?.length > 0;
   const myOffer = errand?.offers?.[0];
   const displayAmount = errand?.agreedPrice ?? errand?.suggestedPrice;
   const basePrice = errand?.suggestedPrice || 5;
   const maxPrice = basePrice * 2;
+
+  const checklistItems = errand ? parseChecklist(errand.description) : [];
+  const checklistProgress = useAppSelector(
+    (state) => state.checklist.progress[id!] ?? [],
+  );
+  const checkedCount = checklistProgress.filter(Boolean).length;
 
   const handleAccept = async () => {
     try {
@@ -97,6 +105,7 @@ const HelperErrandDetails = () => {
   };
 
   const handleMarkComplete = () => {
+    if (id) dispatch(clearProgress(id));
     router.push(`/helper/upload-proof?errandId=${id}`);
   };
 
@@ -107,15 +116,6 @@ const HelperErrandDetails = () => {
         ? `maps:?daddr=${errand.pickupLat},${errand.pickupLng}`
         : `geo:${errand.pickupLat},${errand.pickupLng}?q=${errand.pickupLat},${errand.pickupLng}`;
     Linking.openURL(url);
-  };
-
-  const handleStartErrand = async () => {
-    try {
-      await updateStatus({ errandId: id!, status: "IN_PROGRESS" }).unwrap();
-      Toast.show({ type: "success", text1: "Errand started" });
-    } catch (err) {
-      displayErrorMessage(err);
-    }
   };
 
   const adjustOffer = (direction: "up" | "down") => {
@@ -148,7 +148,7 @@ const HelperErrandDetails = () => {
       >
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
-          <BackButton />
+          <BackButton onBack={() => router.replace("/helper/home")} />
           <Text style={[styles.pageTitle, { color: colors.text }]}>
             Task Details
           </Text>
@@ -217,8 +217,17 @@ const HelperErrandDetails = () => {
                 </Text>
               </View>
               <View style={styles.statusRow}>
-                <Ionicons name="ellipse" size={10} color={colors.warning} />
-                <Text style={[styles.statusText, { color: colors.warning }]}>
+                <Ionicons
+                  name="ellipse"
+                  size={10}
+                  color={STATUS_COLORS[errand.status]}
+                />
+                <Text
+                  style={[
+                    styles.statusText,
+                    { color: STATUS_COLORS[errand.status] },
+                  ]}
+                >
                   {formatErrandStatus(errand.status)}
                 </Text>
               </View>
@@ -274,13 +283,7 @@ const HelperErrandDetails = () => {
               </View>
               {isActive && (
                 <TouchableOpacity
-                  style={[
-                    styles.iconButton,
-                    {
-                      backgroundColor: colors.backgroundSecondary,
-                      borderColor: colors.border,
-                    },
-                  ]}
+                  style={[styles.chatBtn, { backgroundColor: colors.primary }]}
                   onPress={() =>
                     router.push({
                       pathname: "/helper/chat",
@@ -292,11 +295,8 @@ const HelperErrandDetails = () => {
                     })
                   }
                 >
-                  <Ionicons
-                    name="chatbubble-outline"
-                    size={18}
-                    color={colors.primary}
-                  />
+                  <Ionicons name="chatbubble-outline" size={15} color="#fff" />
+                  <Text style={styles.chatBtnText}>Message</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -304,14 +304,85 @@ const HelperErrandDetails = () => {
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-          {/* Description */}
+          {/* Checklist */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Description
-            </Text>
-            <Text style={[styles.description, { color: colors.textSecondary }]}>
-              {errand.description}
-            </Text>
+            <View style={styles.checklistHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                Checklist
+              </Text>
+              {checklistItems.length > 0 && (
+                <Text
+                  style={[
+                    styles.checklistCount,
+                    { color: colors.textTertiary },
+                  ]}
+                >
+                  {checkedCount}/{checklistItems.length}
+                </Text>
+              )}
+            </View>
+            <View
+              style={[
+                styles.checklistCard,
+                {
+                  backgroundColor: colors.backgroundSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              {checklistItems.map((item, index) => {
+                const checked = !!checklistProgress[index];
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={[
+                      styles.checkRow,
+                      index < checklistItems.length - 1 && {
+                        borderBottomWidth: 1,
+                        borderBottomColor: colors.border,
+                      },
+                    ]}
+                    onPress={() =>
+                      dispatch(
+                        toggleItem({
+                          errandId: id!,
+                          index,
+                          total: checklistItems.length,
+                        }),
+                      )
+                    }
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        styles.checkbox,
+                        {
+                          borderColor: checked ? colors.primary : colors.border,
+                          backgroundColor: checked
+                            ? colors.primary
+                            : "transparent",
+                        },
+                      ]}
+                    >
+                      {checked && (
+                        <Ionicons name="checkmark" size={12} color="#fff" />
+                      )}
+                    </View>
+                    <Text
+                      style={[
+                        styles.checkText,
+                        {
+                          color: checked ? colors.textTertiary : colors.text,
+                          textDecorationLine: checked ? "line-through" : "none",
+                        },
+                      ]}
+                    >
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -661,45 +732,53 @@ const HelperErrandDetails = () => {
             </View>
           )}
 
-          {/* Actions — when accepted or in progress */}
+          {/* Actions — when in progress */}
           {isActive && (
             <View style={styles.section}>
-              {errand.status === "ACCEPTED" && (
-                <TouchableOpacity
-                  style={[
-                    styles.actionBtn,
-                    {
-                      backgroundColor: colors.primary,
-                      opacity: isUpdating ? 0.7 : 1,
-                    },
-                  ]}
-                  onPress={handleStartErrand}
-                  disabled={isUpdating}
-                >
-                  <Ionicons name="play-outline" size={18} color="#fff" />
-                  <Text style={styles.actionBtnText}>Start Errand</Text>
-                </TouchableOpacity>
-              )}
-              {errand.status === "IN_PROGRESS" && (
-                <TouchableOpacity
-                  style={[
-                    styles.actionBtn,
-                    {
-                      backgroundColor: colors.success,
-                      opacity: isUpdating ? 0.7 : 1,
-                    },
-                  ]}
-                  onPress={handleMarkComplete}
-                  disabled={isUpdating}
-                >
-                  <Ionicons
-                    name="checkmark-circle-outline"
-                    size={18}
-                    color="#fff"
-                  />
-                  <Text style={styles.actionBtnText}>Mark as Complete</Text>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: colors.success }]}
+                onPress={handleMarkComplete}
+              >
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={18}
+                  color="#fff"
+                />
+                <Text style={styles.actionBtnText}>Mark as Complete</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Disputed notice */}
+          {errand.status === "DISPUTED" && (
+            <View style={styles.section}>
+              <View
+                style={[
+                  styles.noticeCard,
+                  {
+                    backgroundColor: colors.error + "12",
+                    borderColor: colors.error + "50",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="warning-outline"
+                  size={20}
+                  color={colors.error}
+                />
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={[styles.noticeTitle, { color: colors.error }]}>
+                    Dispute in progress
+                  </Text>
+                  <Text
+                    style={[styles.noticeBody, { color: colors.textSecondary }]}
+                  >
+                    The requester has raised a dispute on this errand. Our team
+                    is reviewing it and will reach out if needed. Payment is
+                    held in escrow until the dispute is resolved.
+                  </Text>
+                </View>
+              </View>
             </View>
           )}
         </ScrollView>
@@ -772,9 +851,46 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  chatBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  chatBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
   description: { fontSize: 14, lineHeight: 22 },
+  checklistHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  checklistCount: { fontSize: 13, fontWeight: "500" },
+  checklistCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  checkRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  checkText: { flex: 1, fontSize: 14, lineHeight: 20 },
   locationBlock: { gap: 4 },
-  locationRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  locationRow: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
   locationDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
   locationLine: { width: 2, height: 20, marginLeft: 4, marginVertical: 2 },
   locationLabel: { fontSize: 12, marginBottom: 2 },
@@ -862,4 +978,14 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   declineBtnText: { fontSize: 15, fontWeight: "600" },
+  noticeCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  noticeTitle: { fontSize: 14, fontWeight: "700" },
+  noticeBody: { fontSize: 13, lineHeight: 19 },
 });

@@ -1,7 +1,8 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useColorScheme } from "@/hooks/use-color-scheme";
 import { store } from "@/store";
+import { User } from "@/types/user";
 import { jwtDecode } from "jwt-decode";
+import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   DarkTheme,
@@ -14,17 +15,11 @@ import { useEffect, useState } from "react";
 import "react-native-reanimated";
 import { Provider } from "react-redux";
 import Toast from "react-native-toast-message";
-import {
-  getToken,
-  saveValue,
-  getValue,
-  deleteToken,
-} from "@/utils/secure-store";
+import { getToken, getValue } from "@/utils/secure-store";
 import { AuthState, loginUser } from "@/store/slices";
 import { setThemePreference, ThemePreference } from "@/store/slices/theme";
 
 const THEME_KEY = "theme_preference";
-import { User } from "@/types/user";
 
 SplashScreen.preventAutoHideAsync();
 

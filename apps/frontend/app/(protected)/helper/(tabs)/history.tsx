@@ -41,25 +41,16 @@ const HelperErrandHistory = () => {
   } = useGetHelpedErrandsQuery(
     activeFilter === "ALL"
       ? { status: ["COMPLETED", "DISPUTED"] }
-      : { status: [activeFilter] },
+      : { status: [activeFilter as ErrandStatus] },
     { refetchOnMountOrArgChange: true },
   );
 
   const errands = data?.errands ?? [];
-
-  const totalEarned = errands
-    .filter((e: any) => e.status === "COMPLETED")
-    .reduce(
-      (sum: number, e: any) => sum + (e.agreedPrice ?? e.suggestedPrice ?? 0),
-      0,
-    );
-
-  const totalCompleted = errands.filter(
-    (e: any) => e.status === "COMPLETED",
-  ).length;
-  const totalDisputed = errands.filter(
-    (e: any) => e.status === "DISPUTED",
-  ).length;
+  const {
+    totalEarned = 0,
+    totalCompleted = 0,
+    totalDisputed = 0,
+  } = data?.summary ?? {};
 
   const getStatusColor = (status: ErrandStatus) =>
     status === "COMPLETED" ? colors.success : colors.error;
@@ -362,10 +353,16 @@ const HelperErrandHistory = () => {
                       value: `${selectedErrand.requester?.firstName} ${selectedErrand.requester?.lastName}`,
                     },
                     {
-                      label: "Date",
-                      value: new Date(
-                        selectedErrand.completedAt ?? selectedErrand.createdAt,
-                      ).toLocaleDateString(),
+                      label: "Completed",
+                      value: selectedErrand.completedAt
+                        ? new Date(selectedErrand.completedAt).toLocaleString(
+                            [],
+                            {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            },
+                          )
+                        : "N/A",
                     },
                     {
                       label: "Earned",
@@ -410,6 +407,39 @@ const HelperErrandHistory = () => {
                   ))}
                 </View>
               </View>
+
+              {/* Disputed notice */}
+              {selectedErrand.status === "DISPUTED" && (
+                <View style={styles.detailSection}>
+                  <View
+                    style={[
+                      styles.noticeCard,
+                      {
+                        backgroundColor: colors.error + "12",
+                        borderColor: colors.error + "50",
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="warning-outline"
+                      size={20}
+                      color={colors.error}
+                    />
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text
+                        style={[
+                          styles.noticeBody,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        The requester has raised a dispute on this errand. Our
+                        team is reviewing it and will reach out if needed.
+                        Payment is held in escrow until the dispute is resolved.
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
             </ScrollView>
           </SafeAreaView>
         )}
@@ -506,10 +536,21 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     paddingHorizontal: 14,
     paddingVertical: 14,
+    gap: 12,
   },
-  detailLabel: { fontSize: 14 },
-  detailValue: { fontSize: 14 },
+  detailLabel: { fontSize: 14, flexShrink: 0 },
+  detailValue: { fontSize: 14, flex: 1, textAlign: "right" },
+  noticeCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  noticeTitle: { fontSize: 14, fontWeight: "700" },
+  noticeBody: { fontSize: 13, lineHeight: 19 },
 });

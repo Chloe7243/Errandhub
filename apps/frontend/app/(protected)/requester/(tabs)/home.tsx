@@ -7,6 +7,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useGetRequestedErrandsQuery } from "@/store/api/user";
 import { useAppSelector } from "@/store/hooks";
 import { User } from "@/types";
+import { activeStatuses } from "@errandhub/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";
 import {
@@ -26,25 +27,13 @@ const Home = () => {
   const user = useAppSelector((state) => state.auth.user) as User;
 
   const { currentData: activeErrands, isLoading } = useGetRequestedErrandsQuery(
-    {
-      status: [
-        "ACCEPTED",
-        "IN_PROGRESS",
-        "REVIEWING",
-        "TENTATIVELY_ACCEPTED",
-        "POSTED",
-      ],
-    },
-    { refetchOnMountOrArgChange: true },
-  );
-  const { currentData: completedErrands } = useGetRequestedErrandsQuery(
-    { status: ["COMPLETED"] },
+    { status: activeStatuses },
     { refetchOnMountOrArgChange: true },
   );
 
-  const numberOfActiveErrands = activeErrands?.errands.length ?? 0;
-  const numberOfCompletedErrands = completedErrands?.errands.length ?? 0;
-  const anyActiveErrands = numberOfActiveErrands > 0;
+  const { totalActive = 0, totalCompleted = 0, totalErrands = 0 } =
+    activeErrands?.summary ?? {};
+  const anyActiveErrands = (activeErrands?.errands.length ?? 0) > 0;
 
   const greeting = (() => {
     const hour = new Date().getHours();
@@ -97,7 +86,7 @@ const Home = () => {
         <View style={[styles.info]}>
           <View style={[styles.card, { backgroundColor: colors.background }]}>
             <Text style={[styles.cardValue, { color: colors.text }]}>
-              {numberOfActiveErrands}
+              {totalActive}
             </Text>
             <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
               Active Errands
@@ -105,15 +94,15 @@ const Home = () => {
           </View>
           <View style={[styles.card, { backgroundColor: colors.background }]}>
             <Text style={[styles.cardValue, { color: colors.text }]}>
-              {numberOfCompletedErrands}
+              {totalCompleted}
             </Text>
             <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
-              Completed Errands
+              Completed
             </Text>
           </View>
           <View style={[styles.card, { backgroundColor: colors.background }]}>
             <Text style={[styles.cardValue, { color: colors.text }]}>
-              {numberOfActiveErrands + numberOfCompletedErrands}
+              {totalErrands}
             </Text>
             <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>
               Total Errands
@@ -156,7 +145,6 @@ const Home = () => {
             />
           ) : (
             activeErrands?.errands.map((errand: any) => {
-              console.log({ errand });
               return (
                 <ErrandCard
                   key={errand?.id}

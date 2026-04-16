@@ -5,6 +5,7 @@ import chatReducer from "./slices/chat";
 import matchingReducer from "./slices/matching";
 import themeReducer from "./slices/theme";
 import locationReducer from "./slices/location";
+import checklistReducer from "./slices/checklist";
 
 export const store = configureStore({
   reducer: {
@@ -13,6 +14,7 @@ export const store = configureStore({
     matching: matchingReducer,
     theme: themeReducer,
     location: locationReducer,
+    checklist: checklistReducer,
     [api.reducerPath]: api.reducer,
   },
   middleware: (getDefaultMiddleware) =>

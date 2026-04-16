@@ -13,5 +13,9 @@
   "devDependencies": {
     "concurrently": "^8.2.2",
     "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "expo-image-picker": "~17.0.10",
+    "expo-notifications": "~0.32.16"
   }
 }

@@ -150,8 +150,6 @@ export const selectRole = async (
       avatarUrl: user.avatarUrl,
     };
 
-    console.log({ ...userData, role });
-
     const token = jwt.sign(
       { ...userData, role },
       process.env.JWT_SECRET as string,
@@ -177,8 +175,6 @@ export const forgetPassword = async (
 ) => {
   try {
     const parsed = forgetPasswordSchema.safeParse(req.body);
-    console.log({ parsed });
-
     if (!parsed.success) {
       throw new AppError(parsed.error.errors[0].message, 400);
     }

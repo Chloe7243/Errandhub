@@ -9,16 +9,13 @@ import {
   useGetHelpedErrandsQuery,
   useGetRequestedErrandsQuery,
 } from "@/store/api/user";
+import { activeStatuses } from "@errandhub/shared";
 
-const ACTIVE_REQUESTER_STATUSES = [
-  "POSTED",
-  "TENTATIVELY_ACCEPTED",
+const ACTIVE_HELPER_STATUSES = [
   "ACCEPTED",
   "IN_PROGRESS",
   "REVIEWING",
 ] as const;
-
-const ACTIVE_HELPER_STATUSES = ["ACCEPTED", "IN_PROGRESS", "REVIEWING"] as const;
 
 const SwitchRole = () => {
   const router = useRouter();
@@ -27,7 +24,7 @@ const SwitchRole = () => {
   const role = useAppSelector((state) => state.auth.user?.role);
 
   const { data: requestedData } = useGetRequestedErrandsQuery(
-    { status: ACTIVE_REQUESTER_STATUSES as any },
+    { status: activeStatuses as any },
     { skip: role !== "requester" },
   );
   const { data: helpedData } = useGetHelpedErrandsQuery(

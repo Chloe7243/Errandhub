@@ -2,6 +2,7 @@ import Avatar from "@/components/avatar";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { formatErrandStatus, formatErrandType } from "@/utils/errand";
+import { STATUS_COLORS } from "@/utils/constants";
 import { ErrandStatus, ErrandType } from "@errandhub/shared";
 import { Entypo, Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -18,17 +19,6 @@ type Props = {
   onPress?: () => void;
 };
 
-const statusColors: Record<ErrandStatus, string> = {
-  POSTED: "#F59E0B",
-  TENTATIVELY_ACCEPTED: "#8B5CF6",
-  ACCEPTED: "#3B82F6",
-  IN_PROGRESS: "#6366F1",
-  REVIEWING: "#8B5CF6",
-  COMPLETED: "#10B981",
-  CANCELLED: "#EF4444",
-  EXPIRED: "#6B7280",
-  DISPUTED: "#EF4444",
-};
 
 const ErrandCard = ({
   type,
@@ -43,7 +33,7 @@ const ErrandCard = ({
 }: Props) => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
-  const statusColor = statusColors[status];
+  const statusColor = STATUS_COLORS[status];
   const hasHelper = !!helperFirstName;
   const isTerminal = status === "CANCELLED" || status === "DISPUTED";
 

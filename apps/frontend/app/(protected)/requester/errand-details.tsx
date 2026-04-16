@@ -6,29 +6,30 @@ import BackButton from "@/components/ui/back-button";
 import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import type { RootState } from "@/store";
 import {
-  useGetErrandByIdQuery,
   useAcceptOfferMutation,
   useDeclineOfferMutation,
+  useGetErrandByIdQuery,
 } from "@/store/api/errand";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearCounterOffer } from "@/store/slices";
-import type { RootState } from "@/store";
+import { parseChecklist } from "@/store/slices/checklist";
 import { formatErrandType } from "@/utils/errand";
-import { formatTimeRemaining } from "@/utils/time";
 import { displayErrorMessage } from "@/utils/errors";
 import { getSocket } from "@/utils/socket";
+import { formatTimeRemaining } from "@/utils/time";
+import { CreateErrandInput } from "@errandhub/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useEffect, useState, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 
@@ -45,20 +46,9 @@ const ErrandDetails = () => {
   const colors = Colors[colorScheme ?? "dark"];
   const [acceptOffer, { isLoading: isAccepting }] = useAcceptOfferMutation();
   const [declineOffer, { isLoading: isDeclining }] = useDeclineOfferMutation();
-
-  // Refetch when socket-driven events update this errand's state
-  const reviewWindow = useAppSelector((state: RootState) =>
-    state.matching.reviewWindow?.errandId === id
-      ? state.matching.reviewWindow
-      : null,
-  );
   const expiredErrandId = useAppSelector(
     (state: RootState) => state.matching.expiredErrandId,
   );
-
-  useEffect(() => {
-    if (reviewWindow) refetch();
-  }, [reviewWindow, refetch]);
 
   useEffect(() => {
     if (expiredErrandId === id) refetch();
@@ -107,9 +97,7 @@ const ErrandDetails = () => {
         ? Math.max(
             0,
             Math.ceil(
-              (new Date(errand.updatedAt).getTime() +
-                2 * 60 * 1000 -
-                Date.now()) /
+              (new Date(errand.updatedAt).getTime() + 3 * 1000 - Date.now()) /
                 1000,
             ),
           )
@@ -143,7 +131,7 @@ const ErrandDetails = () => {
         dropoffLocation: errand.dropoffLocation,
         pickupReference: errand.pickupReference ?? "",
         type: errand.type,
-      },
+      } as CreateErrandInput,
     });
   };
 
@@ -175,7 +163,7 @@ const ErrandDetails = () => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <BackButton onBack={() => router.push("/requester/home")} />
+          <BackButton onBack={() => router.replace("/requester/home")} />
           <Text style={[styles.pageTitle, { color: colors.text }]}>
             Errand Details
           </Text>
@@ -190,89 +178,6 @@ const ErrandDetails = () => {
           <>
             {/* Stepper */}
             <ErrandStepper currentStep={errand.status} />
-
-            {/* Map — only when in progress */}
-            {isActive && (
-              <View
-                style={[
-                  styles.mapContainer,
-                  {
-                    backgroundColor: colors.backgroundSecondary,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <View style={styles.mapPlaceholder}>
-                  <Ionicons
-                    name="map-outline"
-                    size={32}
-                    color={colors.textTertiary}
-                  />
-                  <Text
-                    style={[styles.mapText, { color: colors.textTertiary }]}
-                  >
-                    Map Loading...
-                  </Text>
-                </View>
-                <View
-                  style={[styles.etaBar, { backgroundColor: colors.surface }]}
-                >
-                  <View style={styles.etaStat}>
-                    <Ionicons
-                      name="time-outline"
-                      size={16}
-                      color={colors.primary}
-                    />
-                    <Text style={[styles.etaValue, { color: colors.text }]}>
-                      12 min
-                    </Text>
-                    <Text
-                      style={[styles.etaLabel, { color: colors.textTertiary }]}
-                    >
-                      ETA
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.etaDivider,
-                      { backgroundColor: colors.border },
-                    ]}
-                  />
-                  <View style={styles.etaStat}>
-                    <Ionicons
-                      name="navigate-outline"
-                      size={16}
-                      color={colors.primary}
-                    />
-                    <Text style={[styles.etaValue, { color: colors.text }]}>
-                      0.8 mi
-                    </Text>
-                    <Text
-                      style={[styles.etaLabel, { color: colors.textTertiary }]}
-                    >
-                      Away
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.etaDivider,
-                      { backgroundColor: colors.border },
-                    ]}
-                  />
-                  <View style={styles.etaStat}>
-                    <Ionicons name="ellipse" size={10} color={colors.success} />
-                    <Text style={[styles.etaValue, { color: colors.text }]}>
-                      En Route
-                    </Text>
-                    <Text
-                      style={[styles.etaLabel, { color: colors.textTertiary }]}
-                    >
-                      Status
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            )}
 
             {/* Errand Info */}
             <View
@@ -311,11 +216,40 @@ const ErrandDetails = () => {
               <Text style={[styles.title, { color: colors.text }]}>
                 {errand.title}
               </Text>
-              <Text
-                style={[styles.description, { color: colors.textSecondary }]}
-              >
-                {errand.description}
-              </Text>
+              {/* Checklist */}
+              {parseChecklist(errand.description).length > 0 && (
+                <View style={styles.checklistCard}>
+                  {parseChecklist(errand.description).map(
+                    (item, index, arr) => (
+                      <View
+                        key={index}
+                        style={[
+                          styles.checklistRow,
+                          index < arr.length - 1 && {
+                            borderBottomWidth: 1,
+                            borderBottomColor: colors.border,
+                          },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.checklistBullet,
+                            { backgroundColor: colors.primary },
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            styles.checklistItemText,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          {item}
+                        </Text>
+                      </View>
+                    ),
+                  )}
+                </View>
+              )}
               <View
                 style={[styles.divider, { backgroundColor: colors.border }]}
               />
@@ -402,11 +336,8 @@ const ErrandDetails = () => {
                         });
                       }}
                     >
-                      <Ionicons
-                        name="chatbubble-outline"
-                        size={20}
-                        color="#fff"
-                      />
+                      <Ionicons name="chatbubble-outline" size={16} color="#fff" />
+                      <Text style={styles.contactText}>Message</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -427,7 +358,7 @@ const ErrandDetails = () => {
                     </>
                   ) : pendingOffers.length === 0 ? (
                     <>
-                      <ActivityIndicator size="small" color={colors.primary} />
+                      <LoadingSpinner size="small" color={colors.primary} />
                       <View style={{ flex: 1, gap: 2 }}>
                         <Text
                           style={[
@@ -620,10 +551,16 @@ const ErrandDetails = () => {
                     <Text
                       style={[
                         styles.locationText,
-                        { color: colors.textSecondary },
+                        {
+                          color: colors.textSecondary,
+                          textAlign: "right",
+                        },
                       ]}
                     >
-                      {new Date(errand.completedAt).toLocaleDateString()}
+                      {new Date(errand.completedAt).toLocaleString([], {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
                     </Text>
                   </View>
                 )}
@@ -652,8 +589,7 @@ const ErrandDetails = () => {
               </TouchableOpacity>
             )}
 
-            {/* Expired — repost CTA */}
-            {isExpired && (
+            {(isExpired || isCompleted) && (
               <View
                 style={[
                   styles.card,
@@ -677,7 +613,9 @@ const ErrandDetails = () => {
                   >
                     {repostSecondsLeft > 0
                       ? `You can repost this errand in ${formatTimeRemaining(repostSecondsLeft)}`
-                      : "Ready to repost this errand?"}
+                      : isCompleted
+                        ? "Want this errand ran again?"
+                        : "Ready to repost this errand?"}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -694,7 +632,9 @@ const ErrandDetails = () => {
                   <Text style={styles.repostButtonText}>
                     {repostSecondsLeft > 0
                       ? `Repost in ${formatTimeRemaining(repostSecondsLeft)}`
-                      : "Repost Errand"}
+                      : isCompleted
+                        ? "Rerun Errand"
+                        : "Repost Errand"}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -763,19 +703,6 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   pageTitle: { fontSize: 18, fontWeight: "700" },
-  mapContainer: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
-  mapPlaceholder: {
-    height: 200,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  mapText: { fontSize: 14 },
-  etaBar: { flexDirection: "row", alignItems: "center", padding: 14 },
-  etaStat: { flex: 1, alignItems: "center", gap: 2 },
-  etaValue: { fontSize: 15, fontWeight: "700" },
-  etaLabel: { fontSize: 11 },
-  etaDivider: { width: 1, height: 36 },
   card: { padding: 16, borderRadius: 14, borderWidth: 1, gap: 12 },
   cardRow: {
     flexDirection: "row",
@@ -793,9 +720,24 @@ const styles = StyleSheet.create({
   amountPending: { fontSize: 12, fontStyle: "italic" },
   title: { fontSize: 18, fontWeight: "700" },
   description: { fontSize: 14, lineHeight: 20 },
+  checklistCard: {
+    borderRadius: 10,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  checklistRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 2,
+    paddingVertical: 6,
+  },
+  checklistBullet: { width: 7, height: 7, borderRadius: 4, flexShrink: 0 },
+  checklistItemText: { flex: 1, fontSize: 14, lineHeight: 20 },
   divider: { height: 1 },
-  locationRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  locationText: { fontSize: 14 },
+  locationRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  locationText: { fontSize: 14, flex: 1 },
   sectionTitle: { fontSize: 16, fontWeight: "600" },
   helperRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   helperInfo: { flex: 1, gap: 4 },
@@ -803,7 +745,15 @@ const styles = StyleSheet.create({
   noHelperRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   noHelperText: { fontSize: 14, fontStyle: "italic" },
   noHelperSubtext: { fontSize: 12 },
-  contact: { padding: 10, borderRadius: 10 },
+  contact: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  contactText: { color: "#fff", fontSize: 13, fontWeight: "600" },
   offerCount: { fontSize: 13 },
   offerCard: { padding: 12, borderRadius: 10, borderWidth: 1, gap: 12 },
   offerHeader: { flexDirection: "row", alignItems: "center", gap: 10 },

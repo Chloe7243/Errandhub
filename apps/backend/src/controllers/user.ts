@@ -46,6 +46,20 @@ export const getRequestedErrands = async (
           : (status as string).split(",")) as ErrandStatus[])
       : undefined;
 
+    // Always compute summary across ALL errands regardless of the active filter
+    const allErrands = await prisma.errand.findMany({
+      where: { requesterId: req.userId },
+      select: { status: true },
+    });
+
+    const summary = {
+      totalActive: allErrands.filter((e) =>
+        ["POSTED", "IN_PROGRESS", "REVIEWING"].includes(e.status),
+      ).length,
+      totalCompleted: allErrands.filter((e) => e.status === "COMPLETED").length,
+      totalErrands: allErrands.length,
+    };
+
     const errands = await prisma.errand.findMany({
       where: {
         requesterId: req.userId,
@@ -76,7 +90,7 @@ export const getRequestedErrands = async (
       },
     });
 
-    res.status(200).json({ errands });
+    res.status(200).json({ errands, summary });
   } catch (error) {
     next(error);
   }
@@ -96,6 +110,24 @@ export const getHelpedErrands = async (
           : (status as string).split(",")) as ErrandStatus[])
       : undefined;
 
+    // Always fetch all terminal errands so we can compute accurate summary totals
+    // regardless of which filter the client has active.
+    const allTerminal = await prisma.errand.findMany({
+      where: {
+        helperId: req.userId,
+        status: { in: ["COMPLETED", "DISPUTED"] },
+      },
+      select: { status: true, agreedPrice: true, suggestedPrice: true },
+    });
+
+    const summary = {
+      totalEarned: allTerminal
+        .filter((e) => e.status === "COMPLETED")
+        .reduce((sum, e) => sum + (e.agreedPrice ?? e.suggestedPrice ?? 0), 0),
+      totalCompleted: allTerminal.filter((e) => e.status === "COMPLETED").length,
+      totalDisputed: allTerminal.filter((e) => e.status === "DISPUTED").length,
+    };
+
     const errands = await prisma.errand.findMany({
       where: {
         helperId: req.userId,
@@ -114,7 +146,7 @@ export const getHelpedErrands = async (
       },
     });
 
-    res.status(200).json({ errands });
+    res.status(200).json({ errands, summary });
   } catch (error) {
     next(error);
   }
@@ -131,6 +163,26 @@ export const getSettings = async (
     });
 
     res.status(200).json({ settings });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const savePushToken = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { token } = req.body;
+    if (!token) throw new AppError("Token is required", 400);
+
+    await prisma.user.update({
+      where: { id: req.userId },
+      data: { expoPushToken: token },
+    });
+
+    res.status(200).json({ message: "Push token saved" });
   } catch (error) {
     next(error);
   }
@@ -168,8 +220,6 @@ export const updateSettings = async (
         promotions: promotions ?? false,
       },
     });
-
-    console.log({ settings });
 
     res
       .status(200)

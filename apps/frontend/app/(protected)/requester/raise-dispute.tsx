@@ -1,12 +1,19 @@
 import BackButton from "@/components/ui/back-button";
 import Input from "@/components/ui/input";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useRaiseDisputeMutation } from "@/store/api/errand";
+import { displayErrorMessage } from "@/utils/errors";
 import { Ionicons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
+import * as ImagePicker from "expo-image-picker";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
+  Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,7 +23,11 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
 import { z } from "zod";
+
+const CLOUD_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME ?? "";
+const UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? "";
 
 const REASONS = [
   "Item not delivered",
@@ -33,11 +44,29 @@ const disputeSchema = z.object({
 
 type DisputeForm = z.infer<typeof disputeSchema>;
 
+const uploadImage = async (localUri: string): Promise<string> => {
+  const formData = new FormData();
+  formData.append("file", { uri: localUri, type: "image/jpeg", name: "evidence.jpg" } as any);
+  formData.append("upload_preset", UPLOAD_PRESET);
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`,
+    { method: "POST", body: formData },
+  );
+  const data = await res.json();
+  return data.secure_url as string;
+};
+
 const RaiseDispute = () => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
+  const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
+
+  const [raiseDispute, { isLoading: isSubmitting }] = useRaiseDisputeMutation();
+
   const [reasonOpen, setReasonOpen] = useState(false);
-  const [images] = useState<string[]>([]);
+  const [images, setImages] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   const {
     control,
@@ -51,9 +80,98 @@ const RaiseDispute = () => {
 
   const selectedReason = watch("reason");
 
-  const onSubmit = (data: DisputeForm) => {
-    // console.log(data, images);
+  const pickImage = async (): Promise<void> => {
+    if (images.length >= 3 || uploading) return;
+
+    Alert.alert("Add Evidence Photo", "Choose how to add your photo", [
+      {
+        text: "Camera",
+        onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== "granted") {
+            Toast.show({ type: "error", text1: "Camera permission required" });
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: "images",
+            allowsEditing: true,
+            quality: 0.8,
+          });
+          if (result.canceled) return;
+          setUploading(true);
+          try {
+            const url = await uploadImage(result.assets[0].uri);
+            setImages((prev) => [...prev, url]);
+          } catch {
+            Toast.show({
+              type: "error",
+              text1: "Upload failed",
+              text2: "Could not upload image. Please try again.",
+            });
+          } finally {
+            setUploading(false);
+          }
+        },
+      },
+      {
+        text: "Photo Library",
+        onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== "granted") {
+            Toast.show({ type: "error", text1: "Photo library permission required" });
+            return;
+          }
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: "images",
+            allowsEditing: true,
+            quality: 0.8,
+          });
+          if (result.canceled) return;
+          setUploading(true);
+          try {
+            const url = await uploadImage(result.assets[0].uri);
+            setImages((prev) => [...prev, url]);
+          } catch {
+            Toast.show({
+              type: "error",
+              text1: "Upload failed",
+              text2: "Could not upload image. Please try again.",
+            });
+          } finally {
+            setUploading(false);
+          }
+        },
+      },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
+
+  const removeImage = (index: number): void => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const onSubmit = async (data: DisputeForm): Promise<void> => {
+    try {
+      await raiseDispute({
+        errandId: id!,
+        reason: data.reason,
+        explanation: data.explanation,
+        evidenceImageUrl: images[0],
+      }).unwrap();
+
+      Toast.show({
+        type: "success",
+        text1: "Dispute submitted",
+        text2: "We will review your dispute shortly.",
+      });
+
+      router.replace("/requester/home");
+    } catch (err) {
+      displayErrorMessage(err);
+    }
+  };
+
+  const canSubmit = !isSubmitting && !uploading;
 
   return (
     <SafeAreaView
@@ -88,12 +206,7 @@ const RaiseDispute = () => {
           >
             <Ionicons name="warning-outline" size={18} color={colors.warning} />
             <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
-              Payment is held in escrow while we review your dispute. Most cases
-              are resolved within{" "}
-              <Text style={{ fontWeight: "700", color: colors.text }}>
-                24 hours
-              </Text>
-              .
+              Payment is held in escrow while we review your dispute.
             </Text>
           </View>
 
@@ -200,51 +313,84 @@ const RaiseDispute = () => {
               style={[
                 styles.uploadBox,
                 {
-                  borderColor: colors.primary,
+                  borderColor: images.length >= 3 ? colors.border : colors.primary,
                   backgroundColor: colors.surface,
+                  opacity: images.length >= 3 ? 0.5 : 1,
                 },
               ]}
+              onPress={pickImage}
+              disabled={images.length >= 3 || uploading}
             >
-              <Ionicons
-                name="camera-outline"
-                size={32}
-                color={colors.primary}
-              />
-              <Text style={[styles.uploadTitle, { color: colors.text }]}>
-                Tap to upload photos
-              </Text>
-              <Text
-                style={[styles.uploadSubtitle, { color: colors.textTertiary }]}
-              >
-                JPG, PNG up to 5MB • {3 - images.length} remaining
-              </Text>
+              {uploading ? (
+                <>
+                  <LoadingSpinner size="large" />
+                  <Text style={[styles.uploadSubtitle, { color: colors.textTertiary }]}>
+                    Uploading...
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons
+                    name="camera-outline"
+                    size={32}
+                    color={images.length >= 3 ? colors.textTertiary : colors.primary}
+                  />
+                  <Text style={[styles.uploadTitle, { color: colors.text }]}>
+                    Tap to upload photos
+                  </Text>
+                  <Text
+                    style={[styles.uploadSubtitle, { color: colors.textTertiary }]}
+                  >
+                    JPG, PNG up to 5MB • {3 - images.length} remaining
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
+
+            {/* Thumbnail previews */}
+            {images.length > 0 && (
+              <View style={styles.thumbnailRow}>
+                {images.map((uri, index) => (
+                  <View key={uri} style={styles.thumbnailWrapper}>
+                    <Image
+                      source={{ uri }}
+                      style={styles.thumbnail}
+                      resizeMode="cover"
+                    />
+                    <TouchableOpacity
+                      style={[
+                        styles.removeThumbnailBtn,
+                        { backgroundColor: colors.error },
+                      ]}
+                      onPress={() => removeImage(index)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="close" size={12} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
 
           {/* Submit */}
           <TouchableOpacity
-            style={[styles.submitButton, { backgroundColor: colors.error }]}
+            style={[
+              styles.submitButton,
+              { backgroundColor: canSubmit ? colors.error : colors.border },
+            ]}
             onPress={handleSubmit(onSubmit)}
+            disabled={!canSubmit}
           >
-            <Ionicons name="warning-outline" size={18} color="#fff" />
-            <Text style={styles.submitText}>Submit Dispute</Text>
+            {isSubmitting ? (
+              <LoadingSpinner color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="warning-outline" size={18} color="#fff" />
+                <Text style={styles.submitText}>Submit Dispute</Text>
+              </>
+            )}
           </TouchableOpacity>
-
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Ionicons
-              name="information-circle-outline"
-              size={14}
-              color={colors.textTertiary}
-            />
-            <Text style={[styles.footerText, { color: colors.textTertiary }]}>
-              By submitting, you agree to our{" "}
-              <Text style={{ color: colors.primary }}>
-                Dispute Resolution Policy
-              </Text>
-              . Our team will review your case within 24 hours.
-            </Text>
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -308,6 +454,30 @@ const styles = StyleSheet.create({
   },
   uploadTitle: { fontSize: 15, fontWeight: "600" },
   uploadSubtitle: { fontSize: 12 },
+  thumbnailRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 8,
+    flexWrap: "wrap",
+  },
+  thumbnailWrapper: {
+    position: "relative",
+  },
+  thumbnail: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+  },
+  removeThumbnailBtn: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   submitButton: {
     flexDirection: "row",
     alignItems: "center",

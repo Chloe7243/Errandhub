@@ -1,10 +1,13 @@
-import Input from "@/components/ui/input";
 import AddressPicker, {
   type LocationCoords,
 } from "@/components/ui/address-picker";
-import RichTextInput from "@/components/ui/rich-text-area";
+import ChecklistInput from "@/components/ui/checklist-input";
+import Input from "@/components/ui/input";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useCreateErrandMutation } from "@/store/api/errand";
+import { displayErrorMessage } from "@/utils/errors";
 import {
   CreateErrandInput,
   createErrandSchema,
@@ -24,10 +27,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useCreateErrandMutation } from "@/store/api/errand";
-import { displayErrorMessage } from "@/utils/errors";
 import Toast from "react-native-toast-message";
-import LoadingSpinner from "@/components/ui/loading-spinner";
 
 const CreateErrand = () => {
   const router = useRouter();
@@ -35,20 +35,14 @@ const CreateErrand = () => {
   const colors = Colors[colorScheme ?? "dark"];
   const [createErrand, { isLoading }] = useCreateErrandMutation();
 
-  const prefill = useLocalSearchParams<{
-    title?: string;
-    description?: string;
-    pickupLocation?: string;
-    dropoffLocation?: string;
-    pickupReference?: string;
-    type?: ErrandType;
-  }>();
-
+  const prefill = useLocalSearchParams() as Partial<CreateErrandInput>;
   const [taskType, setTaskType] = useState<ErrandType>(
     prefill.type ?? "PICKUP_DELIVERY",
   );
   const [pickupCoords, setPickupCoords] = useState<LocationCoords | null>(null);
-  const [dropoffCoords, setDropoffCoords] = useState<LocationCoords | null>(null);
+  const [dropoffCoords, setDropoffCoords] = useState<LocationCoords | null>(
+    null,
+  );
 
   const {
     control,
@@ -62,7 +56,6 @@ const CreateErrand = () => {
 
   // Pre-fill the form when arriving from a repost
   useEffect(() => {
-    if (!prefill.title) return;
     setTaskType(prefill.type ?? "PICKUP_DELIVERY");
     reset({
       title: prefill.title ?? "",
@@ -72,6 +65,7 @@ const CreateErrand = () => {
       pickupReference: prefill.pickupReference ?? "",
       type: prefill.type ?? "PICKUP_DELIVERY",
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onSubmit = async (data: CreateErrandInput) => {
@@ -156,10 +150,11 @@ const CreateErrand = () => {
             <Controller
               control={control}
               name="description"
-              render={({ field: { onChange } }) => (
-                <RichTextInput
+              render={({ field: { value, onChange } }) => (
+                <ChecklistInput
                   label="Description"
-                  placeholder="Describe your errand in detail..."
+                  placeholder="Enter Instruction"
+                  value={value ?? ""}
                   onChange={onChange}
                   error={errors.description?.message}
                 />

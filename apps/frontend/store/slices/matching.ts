@@ -26,13 +26,6 @@ export type ErrandRequestPayload = {
   expiresAt: string;
 };
 
-type ReviewWindowPayload = {
-  errandId: string;
-  helper: HelperProfile;
-  agreedPrice: number;
-  expiresAt: string;
-};
-
 export type CounterOfferPayload = {
   errandId: string;
   helper: HelperProfile;
@@ -42,7 +35,6 @@ export type CounterOfferPayload = {
 
 type MatchingState = {
   helperRequest: ErrandRequestPayload | null;
-  reviewWindow: ReviewWindowPayload | null;
   counterOffer: CounterOfferPayload | null;
   expiredErrandId: string | null;
   assignedErrandId: string | null;
@@ -50,7 +42,6 @@ type MatchingState = {
 
 const initialState: MatchingState = {
   helperRequest: null,
-  reviewWindow: null,
   counterOffer: null,
   expiredErrandId: null,
   assignedErrandId: null,
@@ -65,12 +56,6 @@ const matchingSlice = createSlice({
     },
     clearHelperRequest(state) {
       state.helperRequest = null;
-    },
-    setReviewWindow(state, action: PayloadAction<ReviewWindowPayload>) {
-      state.reviewWindow = action.payload;
-    },
-    clearReviewWindow(state) {
-      state.reviewWindow = null;
     },
     setCounterOffer(state, action: PayloadAction<CounterOfferPayload>) {
       state.counterOffer = action.payload;
@@ -92,7 +77,6 @@ const matchingSlice = createSlice({
     },
     resetMatching(state) {
       state.helperRequest = null;
-      state.reviewWindow = null;
       state.counterOffer = null;
       state.expiredErrandId = null;
       state.assignedErrandId = null;
@@ -103,8 +87,6 @@ const matchingSlice = createSlice({
 export const {
   setHelperRequest,
   clearHelperRequest,
-  setReviewWindow,
-  clearReviewWindow,
   setCounterOffer,
   clearCounterOffer,
   setErrandExpired,
