@@ -60,9 +60,9 @@ const CreateErrand = () => {
     reset({
       title: prefill.title ?? "",
       description: prefill.description ?? "",
-      pickupLocation: prefill.pickupLocation ?? "",
-      dropoffLocation: prefill.dropoffLocation ?? "",
-      pickupReference: prefill.pickupReference ?? "",
+      firstLocation: prefill.firstLocation ?? "",
+      finalLocation: prefill.finalLocation ?? "",
+      locationReference: prefill.locationReference ?? "",
       type: prefill.type ?? "PICKUP_DELIVERY",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -73,13 +73,18 @@ const CreateErrand = () => {
       const result = await createErrand({
         ...data,
         type: taskType,
-        pickupLat: pickupCoords?.lat,
-        pickupLng: pickupCoords?.lng,
-        dropoffLat: dropoffCoords?.lat,
-        dropoffLng: dropoffCoords?.lng,
-      } as any).unwrap();
-      Toast.show({ type: "success", text1: "Errand posted successfully" });
-      router.push(`/requester/errand-details?id=${result.errand.id}`);
+        finalLocation:
+          taskType === "HANDS_ON_HELP"
+            ? data.firstLocation
+            : data.finalLocation,
+        firstLat: pickupCoords?.lat,
+        firstLng: pickupCoords?.lng,
+        finalLat:
+          taskType === "HANDS_ON_HELP" ? pickupCoords?.lat : dropoffCoords?.lat,
+        finalLng:
+          taskType === "HANDS_ON_HELP" ? pickupCoords?.lng : dropoffCoords?.lng,
+      }).unwrap();
+      router.push(`/requester/payment?errandId=${result.errand.id}`);
     } catch (err) {
       console.error("Error creating errand:", err);
       displayErrorMessage(err);
@@ -104,29 +109,35 @@ const CreateErrand = () => {
               What kind of task?
             </Text>
             <View style={styles.radioGroup}>
-              {(["SHOPPING", "PICKUP_DELIVERY"] as ErrandType[]).map((type) => (
-                <Pressable
-                  key={type}
-                  style={styles.radioRow}
-                  onPress={() => setTaskType(type)}
-                >
-                  <View style={[styles.radio, { borderColor: colors.primary }]}>
-                    {taskType === type && (
-                      <View
-                        style={[
-                          styles.radioDot,
-                          { backgroundColor: colors.primary },
-                        ]}
-                      />
-                    )}
-                  </View>
-                  <Text style={[styles.radioText, { color: colors.text }]}>
-                    {type === "SHOPPING"
-                      ? "Shopping (I need items bought)"
-                      : "Pickup / Delivery (no purchase)"}
-                  </Text>
-                </Pressable>
-              ))}
+              {(["PICKUP_DELIVERY", "HANDS_ON_HELP"] as ErrandType[]).map(
+                (type) => (
+                  <Pressable
+                    key={type}
+                    style={styles.radioRow}
+                    onPress={() => setTaskType(type)}
+                  >
+                    <View
+                      style={[styles.radio, { borderColor: colors.primary }]}
+                    >
+                      {taskType === type && (
+                        <View
+                          style={[
+                            styles.radioDot,
+                            { backgroundColor: colors.primary },
+                          ]}
+                        />
+                      )}
+                    </View>
+                    <Text style={[styles.radioText, { color: colors.text }]}>
+                      {type === "SHOPPING"
+                        ? "Shopping (I need items bought)"
+                        : type === "HANDS_ON_HELP"
+                          ? "Hands-On Help (e.g. moving stuff, setting up, cleaning)"
+                          : "Pickup / Delivery (no purchase)"}
+                    </Text>
+                  </Pressable>
+                ),
+              )}
             </View>
           </View>
 
@@ -138,7 +149,11 @@ const CreateErrand = () => {
               render={({ field: { value, onChange, onBlur } }) => (
                 <Input
                   label="Title"
-                  placeholder="e.g. Pick up my parcel"
+                  placeholder={
+                    taskType === "HANDS_ON_HELP"
+                      ? "e.g. Move my furniture"
+                      : "e.g. Pick up my parcel"
+                  }
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -163,47 +178,79 @@ const CreateErrand = () => {
 
             <Controller
               control={control}
-              name="pickupLocation"
+              name="firstLocation"
               render={({ field: { value, onChange } }) => (
                 <AddressPicker
-                  label="Pickup Location"
-                  placeholder="Search pickup address..."
+                  label={
+                    taskType === "HANDS_ON_HELP"
+                      ? "Location"
+                      : "Pickup Location"
+                  }
+                  placeholder={
+                    taskType === "HANDS_ON_HELP"
+                      ? "Search location..."
+                      : "Search pickup address..."
+                  }
                   value={value}
                   onSelect={onChange}
                   onCoordinatesSelect={setPickupCoords}
-                  error={errors.pickupLocation?.message}
+                  error={errors.firstLocation?.message}
                 />
               )}
             />
 
-            <Controller
-              control={control}
-              name="dropoffLocation"
-              render={({ field: { value, onChange } }) => (
-                <AddressPicker
-                  label="Drop-off Location"
-                  placeholder="Search drop-off address..."
-                  value={value}
-                  onSelect={onChange}
-                  onCoordinatesSelect={setDropoffCoords}
-                  error={errors.dropoffLocation?.message}
+            {taskType !== "HANDS_ON_HELP" && (
+              <>
+                <Controller
+                  control={control}
+                  name="finalLocation"
+                  render={({ field: { value, onChange } }) => (
+                    <AddressPicker
+                      label="Drop-off Location"
+                      placeholder="Search drop-off address..."
+                      value={value ?? ""}
+                      onSelect={onChange}
+                      onCoordinatesSelect={setDropoffCoords}
+                      error={errors.finalLocation?.message}
+                    />
+                  )}
                 />
-              )}
-            />
 
-            <Controller
-              control={control}
-              name="pickupReference"
-              render={({ field: { value, onChange, onBlur } }) => (
-                <Input
-                  label="Pickup Reference (optional)"
-                  placeholder="e.g. Name: Alice Smith, Code: #PKG-8472"
-                  value={value ?? ""}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
+                <Controller
+                  control={control}
+                  name="locationReference"
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <Input
+                      label="Pickup Reference (optional)"
+                      placeholder="e.g. Name: Alice Smith, Code: #PKG-8472"
+                      value={value ?? ""}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                    />
+                  )}
                 />
-              )}
-            />
+              </>
+            )}
+
+            {taskType === "HANDS_ON_HELP" && (
+              <Controller
+                control={control}
+                name="estimatedDuration"
+                render={({ field: { value, onChange, onBlur } }) => (
+                  <Input
+                    label="Estimated Duration (hours)"
+                    placeholder="e.g. 2"
+                    value={value ? String(value) : ""}
+                    onChangeText={(t) =>
+                      onChange(t ? parseFloat(t) : undefined)
+                    }
+                    onBlur={onBlur}
+                    keyboardType="decimal-pad"
+                    error={errors.estimatedDuration?.message}
+                  />
+                )}
+              />
+            )}
           </View>
 
           {/* Suggested Price Notice */}
@@ -222,8 +269,9 @@ const CreateErrand = () => {
               color={colors.primary}
             />
             <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
-              A suggested price will be calculated based on distance. Helpers
-              can make a counter-offer before you confirm.
+              {taskType === "HANDS_ON_HELP"
+                ? "A suggested hourly rate will be shown. Helpers can negotiate the rate before you confirm."
+                : "A suggested price will be calculated based on distance. Helpers can make a counter-offer before you confirm."}
             </Text>
           </View>
         </View>

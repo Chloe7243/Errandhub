@@ -82,11 +82,15 @@ const UploadProof = () => {
     const result = useCamera
       ? await ImagePicker.launchCameraAsync({
           mediaTypes: "images",
+          allowsEditing: true,
           quality: 0.8,
+          shape: "rectangle",
         })
       : await ImagePicker.launchImageLibraryAsync({
           mediaTypes: "images",
+          allowsEditing: true,
           quality: 0.8,
+          shape: "rectangle",
         });
 
     if (result.canceled) return;

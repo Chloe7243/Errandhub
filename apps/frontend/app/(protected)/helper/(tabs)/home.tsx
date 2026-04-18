@@ -1,6 +1,5 @@
 import AvailabilityToggle from "@/components/availability-toggle";
 import Avatar from "@/components/avatar";
-import DispatchRequestModal from "@/components/dispatch-request-modal";
 import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -9,8 +8,7 @@ import {
   useGetHelpedErrandsQuery,
   useGetSettingsQuery,
 } from "@/store/api/user";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { clearHelperRequest } from "@/store/slices";
+import { useAppSelector } from "@/store/hooks";
 import { User } from "@/types";
 import { formatErrandType } from "@/utils/errand";
 import { getSocket } from "@/utils/socket";
@@ -25,22 +23,13 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-// import {
-//   setCoordinates,
-//   setLocationEnabled,
-//   setPermissionStatus,
-// } from "@/store/slices/location";
 import { activeStatuses } from "@errandhub/shared";
 import * as Location from "expo-location";
 
 const HelperHome = () => {
   const router = useRouter();
-  const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
-  const helperRequest = useAppSelector(
-    (state: RootState) => state.matching.helperRequest,
-  );
   const user = useAppSelector((state: RootState) => state.auth.user) as User;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [location, setLocation] = useState<Location.LocationObject | null>(
@@ -80,7 +69,7 @@ const HelperHome = () => {
       const now = new Date();
       return d.toDateString() === now.toDateString();
     })
-    .reduce((sum: number, e: any) => sum + (e.agreedPrice ?? 0), 0);
+    .reduce((sum: number, e: any) => sum + e.finalCost, 0);
 
   const weekStart = new Date();
   weekStart.setDate(weekStart.getDate() - weekStart.getDay());
@@ -88,7 +77,7 @@ const HelperHome = () => {
 
   const weekEarnings = completedErrands
     .filter((e: any) => e.completedAt && new Date(e.completedAt) >= weekStart)
-    .reduce((sum: number, e: any) => sum + (e.agreedPrice ?? 0), 0);
+    .reduce((sum: number, e: any) => sum + e.finalCost, 0);
 
   const [isAvailable, setIsAvailable] = useState(false);
 
@@ -101,27 +90,6 @@ const HelperHome = () => {
   const activeTask = activeData?.errands?.[0] ?? null;
   const hasActiveTask = !!activeTask;
 
-  const handleAccept = () => {
-    const socket = getSocket();
-    if (!helperRequest || !socket) return;
-    socket.emit("accept_errand", { errandId: helperRequest.errandId });
-    dispatch(clearHelperRequest());
-  };
-
-  const handleDecline = () => {
-    const socket = getSocket();
-    if (!helperRequest || !socket) return;
-    socket.emit("decline_errand", { errandId: helperRequest.errandId });
-    dispatch(clearHelperRequest());
-  };
-
-  const handleCounterOffer = (amount: number) => {
-    const socket = getSocket();
-    if (!helperRequest || !socket) return;
-    socket.emit("counter_offer", { errandId: helperRequest.errandId, amount });
-    dispatch(clearHelperRequest());
-  };
-
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -132,6 +100,7 @@ const HelperHome = () => {
             <Avatar
               firstName={user?.firstName ?? ""}
               lastName={user?.lastName ?? ""}
+              uri={user?.avatarUrl ?? undefined}
               size={50}
             />
             <View>
@@ -277,7 +246,7 @@ const HelperHome = () => {
                 <Text
                   style={[styles.locationText, { color: colors.textSecondary }]}
                 >
-                  {activeTask.pickupLocation}
+                  {activeTask.firstLocation}
                 </Text>
               </View>
               <TouchableOpacity
@@ -377,13 +346,6 @@ const HelperHome = () => {
           )}
         </View>
       </ScrollView>
-
-      <DispatchRequestModal
-        helperRequest={helperRequest}
-        onAccept={handleAccept}
-        onDecline={handleDecline}
-        onCounterOffer={handleCounterOffer}
-      />
     </SafeAreaView>
   );
 };

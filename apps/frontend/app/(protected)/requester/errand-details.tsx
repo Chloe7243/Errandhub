@@ -1,5 +1,4 @@
 import Avatar from "@/components/avatar";
-import CounterOfferModal from "@/components/counter-offer-modal";
 import EmptyState from "@/components/empty-state";
 import ErrandStepper from "@/components/errand-stepper";
 import BackButton from "@/components/ui/back-button";
@@ -7,17 +6,11 @@ import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import type { RootState } from "@/store";
-import {
-  useAcceptOfferMutation,
-  useDeclineOfferMutation,
-  useGetErrandByIdQuery,
-} from "@/store/api/errand";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { clearCounterOffer } from "@/store/slices";
+import { useGetErrandByIdQuery } from "@/store/api/errand";
+import { useAppSelector } from "@/store/hooks";
 import { parseChecklist } from "@/store/slices/checklist";
 import { formatErrandType } from "@/utils/errand";
 import { displayErrorMessage } from "@/utils/errors";
-import { getSocket } from "@/utils/socket";
 import { formatTimeRemaining } from "@/utils/time";
 import { CreateErrandInput } from "@errandhub/shared";
 import { Ionicons } from "@expo/vector-icons";
@@ -40,12 +33,9 @@ const ErrandDetails = () => {
   });
 
   const router = useRouter();
-  const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
   const errand = currentData?.errand;
   const colors = Colors[colorScheme ?? "dark"];
-  const [acceptOffer, { isLoading: isAccepting }] = useAcceptOfferMutation();
-  const [declineOffer, { isLoading: isDeclining }] = useDeclineOfferMutation();
   const expiredErrandId = useAppSelector(
     (state: RootState) => state.matching.expiredErrandId,
   );
@@ -54,33 +44,6 @@ const ErrandDetails = () => {
     if (expiredErrandId === id) refetch();
   }, [expiredErrandId, id, refetch]);
 
-  // Only show the counter offer modal if it's for this errand
-  const counterOffer = useAppSelector((state: RootState) =>
-    state.matching.counterOffer?.errandId === id
-      ? state.matching.counterOffer
-      : null,
-  );
-
-  const handleCounterOfferAccept = () => {
-    const socket = getSocket();
-    if (!socket || !counterOffer) return;
-    socket.emit("offer_response", {
-      errandId: counterOffer.errandId,
-      accept: true,
-    });
-    dispatch(clearCounterOffer());
-  };
-
-  const handleCounterOfferDecline = () => {
-    const socket = getSocket();
-    if (!socket || !counterOffer) return;
-    socket.emit("offer_response", {
-      errandId: counterOffer.errandId,
-      accept: false,
-    });
-    dispatch(clearCounterOffer());
-  };
-
   const isActive = errand?.status === "IN_PROGRESS";
   const isCompleted = errand?.status === "COMPLETED";
   const isReviewing = errand?.status === "REVIEWING";
@@ -88,7 +51,6 @@ const ErrandDetails = () => {
   const isTerminal =
     errand?.status === "CANCELLED" || errand?.status === "DISPUTED";
   const displayAmount = errand?.agreedPrice ?? errand?.suggestedPrice;
-  const pendingOffers = errand?.offers ?? [];
 
   // Seconds until the 2-minute repost cooldown expires
   const getRepostSecondsLeft = useCallback(
@@ -127,30 +89,12 @@ const ErrandDetails = () => {
       params: {
         title: errand.title,
         description: errand.description,
-        pickupLocation: errand.pickupLocation,
-        dropoffLocation: errand.dropoffLocation,
-        pickupReference: errand.pickupReference ?? "",
+        firstLocation: errand.firstLocation,
+        finalLocation: errand.finalLocation,
+        locationReference: errand.locationReference ?? "",
         type: errand.type,
       } as CreateErrandInput,
     });
-  };
-
-  const handleAcceptOffer = async (offerId: string) => {
-    try {
-      await acceptOffer({ errandId: errand!.id, offerId }).unwrap();
-      Toast.show({ type: "success", text1: "Helper accepted!" });
-    } catch (err) {
-      displayErrorMessage(err);
-    }
-  };
-
-  const handleDeclineOffer = async (offerId: string) => {
-    try {
-      await declineOffer({ errandId: errand!.id, offerId }).unwrap();
-      Toast.show({ type: "success", text1: "Offer declined" });
-    } catch (err) {
-      displayErrorMessage(err);
-    }
   };
 
   return (
@@ -198,18 +142,9 @@ const ErrandDetails = () => {
                 >
                   {formatErrandType(errand.type)}
                 </Text>
-                {displayAmount ? (
+                {displayAmount != null && (
                   <Text style={[styles.amount, { color: colors.primary }]}>
-                    £{displayAmount.toFixed(2)}
-                  </Text>
-                ) : (
-                  <Text
-                    style={[
-                      styles.amountPending,
-                      { color: colors.textTertiary },
-                    ]}
-                  >
-                    Awaiting offers
+                    £{displayAmount.toFixed(2)}{errand.type === "HANDS_ON_HELP" ? "/hr" : ""}
                   </Text>
                 )}
               </View>
@@ -262,22 +197,24 @@ const ErrandDetails = () => {
                 <Text
                   style={[styles.locationText, { color: colors.textSecondary }]}
                 >
-                  {errand.pickupLocation}
+                  {errand.firstLocation}
                 </Text>
               </View>
-              <View style={styles.locationRow}>
-                <Ionicons
-                  name="navigate-outline"
-                  size={16}
-                  color={colors.textTertiary}
-                />
-                <Text
-                  style={[styles.locationText, { color: colors.textSecondary }]}
-                >
-                  {errand.dropoffLocation}
-                </Text>
-              </View>
-              {errand.pickupReference && (
+              {errand.type !== "HANDS_ON_HELP" && (
+                <View style={styles.locationRow}>
+                  <Ionicons
+                    name="navigate-outline"
+                    size={16}
+                    color={colors.textTertiary}
+                  />
+                  <Text
+                    style={[styles.locationText, { color: colors.textSecondary }]}
+                  >
+                    {errand.finalLocation}
+                  </Text>
+                </View>
+              )}
+              {errand.locationReference && (
                 <View style={styles.locationRow}>
                   <Ionicons
                     name="document-text-outline"
@@ -290,7 +227,7 @@ const ErrandDetails = () => {
                       { color: colors.textSecondary },
                     ]}
                   >
-                    Ref: {errand.pickupReference}
+                    Ref: {errand.locationReference}
                   </Text>
                 </View>
               )}
@@ -356,7 +293,7 @@ const ErrandDetails = () => {
                         No helpers were available for this errand
                       </Text>
                     </>
-                  ) : pendingOffers.length === 0 ? (
+                  ) : (
                     <>
                       <LoadingSpinner size="small" color={colors.primary} />
                       <View style={{ flex: 1, gap: 2 }}>
@@ -378,147 +315,10 @@ const ErrandDetails = () => {
                         </Text>
                       </View>
                     </>
-                  ) : (
-                    <>
-                      <Ionicons
-                        name="person-outline"
-                        size={20}
-                        color={colors.textTertiary}
-                      />
-                      <Text
-                        style={[
-                          styles.noHelperText,
-                          { color: colors.textTertiary },
-                        ]}
-                      >
-                        {`${pendingOffers.length} helper${pendingOffers.length > 1 ? "s" : ""} interested — review offers below`}
-                      </Text>
-                    </>
                   )}
                 </View>
               )}
             </View>
-            {/* Offers — only show pending offers when status is POSTED */}
-            {errand.status === "POSTED" && pendingOffers.length > 0 && (
-              <View
-                style={[{ display: "flex", flexDirection: "column", gap: 12 }]}
-              >
-                <View style={styles.cardRow}>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    Offers
-                  </Text>
-                  <Text
-                    style={[styles.offerCount, { color: colors.textTertiary }]}
-                  >
-                    {pendingOffers.length} pending
-                  </Text>
-                </View>
-
-                {pendingOffers.map((offer: any) => (
-                  <View
-                    key={offer.id}
-                    style={[
-                      styles.offerCard,
-                      {
-                        backgroundColor: colors.backgroundSecondary,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <View style={styles.offerHeader}>
-                      <Avatar
-                        firstName={offer.helper?.firstName}
-                        lastName={offer.helper?.lastName}
-                        uri={offer.helper?.avatarUrl ?? undefined}
-                        size={40}
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[styles.helperName, { color: colors.text }]}
-                        >
-                          {offer.helper?.firstName} {offer.helper?.lastName}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.offerTime,
-                            { color: colors.textTertiary },
-                          ]}
-                        >
-                          {new Date(offer.createdAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </Text>
-                      </View>
-                      <Text
-                        style={[styles.offerAmount, { color: colors.primary }]}
-                      >
-                        £{offer.amount.toFixed(2)}
-                      </Text>
-                    </View>
-
-                    <View style={styles.offerActions}>
-                      <TouchableOpacity
-                        style={[
-                          styles.declineBtn,
-                          {
-                            backgroundColor: colors.error,
-                            borderColor: colors.error,
-                          },
-                        ]}
-                        onPress={() => handleDeclineOffer(offer.id)}
-                        disabled={isAccepting || isDeclining}
-                      >
-                        <Text style={[styles.declineBtnText]}>Decline</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.acceptBtn,
-                          {
-                            backgroundColor: colors.success,
-                            opacity: isAccepting ? 0.7 : 1,
-                          },
-                        ]}
-                        onPress={() => handleAcceptOffer(offer.id)}
-                        disabled={isAccepting || isDeclining}
-                      >
-                        <Text style={styles.acceptBtnText}>Accept</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {/* No offers yet */}
-            {errand.status === "POSTED" && pendingOffers.length === 0 && (
-              <View
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 12,
-                }}
-              >
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  Offers
-                </Text>
-                <EmptyState
-                  containerStyle={[
-                    styles.card,
-                    {
-                      flex: 1,
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  variant="card"
-                  icon="hourglass-outline"
-                  message="No offers yet — helpers will be notified"
-                />
-              </View>
-            )}
-
             {/* Completed info */}
             {isCompleted && (
               <View
@@ -535,7 +335,10 @@ const ErrandDetails = () => {
                     Amount Paid
                   </Text>
                   <Text style={[styles.amount, { color: colors.primary }]}>
-                    £{displayAmount?.toFixed(2) ?? "—"}
+                    £{(errand.type === "HANDS_ON_HELP" && errand.finalCost != null
+                      ? errand.finalCost
+                      : displayAmount
+                    )?.toFixed(2) ?? "—"}
                   </Text>
                 </View>
                 {errand.completedAt && (
@@ -677,11 +480,6 @@ const ErrandDetails = () => {
         </TouchableOpacity>
       )}
 
-      <CounterOfferModal
-        counterOffer={counterOffer}
-        onAccept={handleCounterOfferAccept}
-        onDecline={handleCounterOfferDecline}
-      />
     </SafeAreaView>
   );
 };
@@ -717,7 +515,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   amount: { fontSize: 20, fontWeight: "700" },
-  amountPending: { fontSize: 12, fontStyle: "italic" },
   title: { fontSize: 18, fontWeight: "700" },
   description: { fontSize: 14, lineHeight: 20 },
   checklistCard: {
@@ -754,27 +551,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   contactText: { color: "#fff", fontSize: 13, fontWeight: "600" },
-  offerCount: { fontSize: 13 },
-  offerCard: { padding: 12, borderRadius: 10, borderWidth: 1, gap: 12 },
-  offerHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
-  offerAmount: { fontSize: 18, fontWeight: "700" },
-  offerTime: { fontSize: 12, marginTop: 2 },
-  offerActions: { flexDirection: "row", gap: 10 },
-  declineBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: "center",
-  },
-  declineBtnText: { fontSize: 14, fontWeight: "500", color: "#fff" },
-  acceptBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  acceptBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
   reviewButton: {
     flexDirection: "row",
     alignItems: "center",

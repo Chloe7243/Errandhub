@@ -18,6 +18,7 @@ import Toast from "react-native-toast-message";
 import { getToken, getValue } from "@/utils/secure-store";
 import { AuthState, loginUser } from "@/store/slices";
 import { setThemePreference, ThemePreference } from "@/store/slices/theme";
+import { StripeProvider } from "@stripe/stripe-react-native";
 
 const THEME_KEY = "theme_preference";
 
@@ -78,14 +79,19 @@ function RootLayoutNav() {
   }, [isAuthenticated, user?.role]);
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(protected)" options={{ headerShown: false }} />
-      </Stack>
-      <StatusBar style="auto" />
-      <Toast />
-    </ThemeProvider>
+    <StripeProvider
+      publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}
+      merchantIdentifier="merchant.com.errandhub"
+    >
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="(protected)" options={{ headerShown: false }} />
+        </Stack>
+        <StatusBar style="auto" />
+        <Toast />
+      </ThemeProvider>
+    </StripeProvider>
   );
 }

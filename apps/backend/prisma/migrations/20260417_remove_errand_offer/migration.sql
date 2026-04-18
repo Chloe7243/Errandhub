@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS "ErrandOffer";
+DROP TYPE IF EXISTS "OfferStatus";

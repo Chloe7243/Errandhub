@@ -4,6 +4,7 @@ export const formatErrandType = (type: ErrandType): string => {
   const labels: Record<ErrandType, string> = {
     PICKUP_DELIVERY: "Pickup & Delivery",
     SHOPPING: "Shopping",
+    HANDS_ON_HELP: "Hands-On Help",
   };
   return labels[type];
 };

@@ -66,6 +66,14 @@ const usersApi = api.injectEndpoints({
         body: { token },
       }),
     }),
+    updateAvatar: builder.mutation<{ avatarUrl: string }, string>({
+      query: (avatarUrl) => ({
+        url: "user/avatar",
+        method: "PATCH",
+        body: { avatarUrl },
+      }),
+      invalidatesTags: [TAGS.USER],
+    }),
   }),
 });
 
@@ -76,4 +84,5 @@ export const {
   useUpdateSettingsMutation,
   useGetRequestedErrandsQuery,
   useSavePushTokenMutation,
+  useUpdateAvatarMutation,
 } = usersApi;

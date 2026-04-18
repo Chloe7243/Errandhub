@@ -4,35 +4,35 @@ import { StyleSheet, View, ViewStyle } from "react-native";
 import { WebView } from "react-native-webview";
 
 type Props = {
-  pickupLat: number;
-  pickupLng: number;
-  dropoffLat?: number;
-  dropoffLng?: number;
+  firstLat: number;
+  firstLng: number;
+  finalLat?: number;
+  finalLng?: number;
   style?: ViewStyle;
 };
 
 const buildHtml = (
-  pickupLat: number,
-  pickupLng: number,
-  dropoffLat?: number,
-  dropoffLng?: number,
+  firstLat: number,
+  firstLng: number,
+  finalLat?: number,
+  finalLng?: number,
   dark?: boolean,
 ) => {
-  const hasDropoff = dropoffLat !== undefined && dropoffLng !== undefined;
+  const hasDropoff = finalLat !== undefined && finalLng !== undefined;
 
-  const centreLat = hasDropoff ? (pickupLat + dropoffLat!) / 2 : pickupLat;
-  const centreLng = hasDropoff ? (pickupLng + dropoffLng!) / 2 : pickupLng;
+  const centreLat = hasDropoff ? (firstLat + finalLat!) / 2 : firstLat;
+  const centreLng = hasDropoff ? (firstLng + finalLng!) / 2 : firstLng;
 
   const padding = 0.012;
-  const lats = hasDropoff ? [pickupLat, dropoffLat!] : [pickupLat];
-  const lngs = hasDropoff ? [pickupLng, dropoffLng!] : [pickupLng];
+  const lats = hasDropoff ? [firstLat, finalLat!] : [firstLat];
+  const lngs = hasDropoff ? [firstLng, finalLng!] : [firstLng];
   const south = Math.min(...lats) - padding;
   const north = Math.max(...lats) + padding;
   const west = Math.min(...lngs) - padding;
   const east = Math.max(...lngs) + padding;
 
   const dropoffMarker = hasDropoff
-    ? `L.marker([${dropoffLat}, ${dropoffLng}], {
+    ? `L.marker([${finalLat}, ${finalLng}], {
         icon: L.divIcon({
           className: '',
           html: '<div style="width:14px;height:14px;border-radius:50%;background:#ef4444;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>',
@@ -71,7 +71,7 @@ const buildHtml = (
 
     L.tileLayer('${tileUrl}', { attribution: '${attribution}', maxZoom: 19 }).addTo(map);
 
-    L.marker([${pickupLat}, ${pickupLng}], {
+    L.marker([${firstLat}, ${firstLng}], {
       icon: L.divIcon({
         className: '',
         html: '<div style="width:14px;height:14px;border-radius:50%;background:#6366f1;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>',
@@ -87,17 +87,17 @@ const buildHtml = (
 };
 
 const MapPreview = ({
-  pickupLat,
-  pickupLng,
-  dropoffLat,
-  dropoffLng,
+  firstLat,
+  firstLng,
+  finalLat,
+  finalLng,
   style,
 }: Props) => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const dark = colorScheme === "dark";
 
-  const html = buildHtml(pickupLat, pickupLng, dropoffLat, dropoffLng, dark);
+  const html = buildHtml(firstLat, firstLng, finalLat, finalLng, dark);
 
   return (
     <View style={[styles.container, { borderColor: colors.border }, style]}>

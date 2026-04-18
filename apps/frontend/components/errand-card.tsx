@@ -19,7 +19,6 @@ type Props = {
   onPress?: () => void;
 };
 
-
 const ErrandCard = ({
   type,
   status,
@@ -75,6 +74,7 @@ const ErrandCard = ({
         {amount ? (
           <Text style={[styles.amount, { color: colors.primary }]}>
             £{amount?.toFixed(2)}
+            {type === "HANDS_ON_HELP" ? "/hr" : ""}
           </Text>
         ) : (
           <Text style={[styles.amountPending, { color: colors.textTertiary }]}>

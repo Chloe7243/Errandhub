@@ -3,10 +3,13 @@ import dotenv from "dotenv";
 import express from "express";
 import { createServer } from "http";
 
+import { initSocket } from "./lib/socket";
+
 import authRoutes from "./routes/auth";
 import userRoutes from "./routes/user";
 import errandRoutes from "./routes/errand";
-import { initSocket } from "./lib/socket";
+import paymentRoutes from "./routes/payment";
+
 import requireBody from "./middleware/body";
 import authMiddleware from "./middleware/auth";
 import { errorHandler } from "./middleware/errors";
@@ -37,6 +40,7 @@ app.get("/health", (req, res) => {
 app.use("/auth", requireBody, authRoutes);
 app.use("/user", authMiddleware, userRoutes);
 app.use("/errand", authMiddleware, errandRoutes);
+app.use("/payment", authMiddleware, paymentRoutes);
 app.use(errorHandler);
 
 httpServer.listen(PORT, () => {

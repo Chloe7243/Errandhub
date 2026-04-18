@@ -4,6 +4,8 @@ import { useSavePushTokenMutation } from "@/store/api/user";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   AuthState,
+  clearCounterOffer,
+  clearHelperRequest,
   setCounterOffer,
   setErrandAssigned,
   setErrandExpired,
@@ -11,11 +13,15 @@ import {
 } from "@/store/slices";
 import { addMessage } from "@/store/slices/chat";
 import { TAGS } from "@/utils/constants";
-import { connectSocket, disconnectSocket } from "@/utils/socket";
+import { connectSocket, disconnectSocket, getSocket } from "@/utils/socket";
 import { registerForPushNotifications } from "@/utils/notifications";
+import CounterOfferModal from "@/components/counter-offer-modal";
+import DispatchRequestModal from "@/components/dispatch-request-modal";
+import type { RootState } from "@/store";
 import * as Notifications from "expo-notifications";
 import { Stack, useRouter } from "expo-router";
 import { useEffect } from "react";
+import { View } from "react-native";
 import Toast from "react-native-toast-message";
 
 export default function ProtectedLayout() {
@@ -23,6 +29,50 @@ export default function ProtectedLayout() {
   const dispatch = useAppDispatch();
   const { user } = useAppSelector((state) => state.auth) as AuthState;
   const [savePushToken] = useSavePushTokenMutation();
+
+  const helperRequest = useAppSelector(
+    (state: RootState) => state.matching.helperRequest,
+  );
+  const counterOffer = useAppSelector(
+    (state: RootState) => state.matching.counterOffer,
+  );
+
+  // Helper: dispatch request modal handlers
+  const handleAccept = () => {
+    const socket = getSocket();
+    if (!helperRequest || !socket) return;
+    socket.emit("accept_errand", { errandId: helperRequest.errandId });
+    dispatch(clearHelperRequest());
+  };
+
+  const handleDecline = () => {
+    const socket = getSocket();
+    if (!helperRequest || !socket) return;
+    socket.emit("decline_errand", { errandId: helperRequest.errandId });
+    dispatch(clearHelperRequest());
+  };
+
+  const handleCounterOffer = (amount: number) => {
+    const socket = getSocket();
+    if (!helperRequest || !socket) return;
+    socket.emit("counter_offer", { errandId: helperRequest.errandId, amount });
+    dispatch(clearHelperRequest());
+  };
+
+  // Requester: counter offer modal handlers
+  const handleCounterOfferAccept = () => {
+    const socket = getSocket();
+    if (!socket || !counterOffer) return;
+    socket.emit("offer_response", { errandId: counterOffer.errandId, accept: true });
+    dispatch(clearCounterOffer());
+  };
+
+  const handleCounterOfferDecline = () => {
+    const socket = getSocket();
+    if (!socket || !counterOffer) return;
+    socket.emit("offer_response", { errandId: counterOffer.errandId, accept: false });
+    dispatch(clearCounterOffer());
+  };
 
   useEffect(() => {
     if (!user?.role) return;
@@ -77,9 +127,6 @@ export default function ProtectedLayout() {
 
         socket.on("counter_offer", (payload) => {
           dispatch(setCounterOffer(payload));
-          if (user?.role === "requester") {
-            router.push(`/requester/errand-details?id=${payload.errandId}`);
-          }
         });
 
         socket.on("errand_expired", (payload) => {
@@ -164,6 +211,32 @@ export default function ProtectedLayout() {
           }
         });
 
+        socket.on("work_started", (payload) => {
+          dispatch(
+            api.util.invalidateTags([{ type: TAGS.ERRAND, id: payload.errandId }]),
+          );
+          if (user?.role === "requester") {
+            Toast.show({
+              type: "info",
+              text1: "Work has started",
+              text2: "Your helper has arrived and the timer is running.",
+            });
+          }
+        });
+
+        socket.on("errand_extended", (payload) => {
+          dispatch(
+            api.util.invalidateTags([{ type: TAGS.ERRAND, id: payload.errandId }]),
+          );
+          if (user?.role === "requester") {
+            Toast.show({
+              type: "info",
+              text1: "Job extended",
+              text2: `Your helper needs ${payload.additionalHours} more hour${payload.additionalHours !== 1 ? "s" : ""}.`,
+            });
+          }
+        });
+
         socket.on("match_unavailable", (payload) => {
           if (user?.role === "helper") {
             Toast.show({
@@ -187,5 +260,20 @@ export default function ProtectedLayout() {
     // Re-run when role changes so the socket reconnects with the role-bearing token
   }, [user?.role]);
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false }} />
+      <DispatchRequestModal
+        helperRequest={helperRequest}
+        onAccept={handleAccept}
+        onDecline={handleDecline}
+        onCounterOffer={handleCounterOffer}
+      />
+      <CounterOfferModal
+        counterOffer={counterOffer}
+        onAccept={handleCounterOfferAccept}
+        onDecline={handleCounterOfferDecline}
+      />
+    </View>
+  );
 }

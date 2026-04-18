@@ -42,8 +42,8 @@ const ReviewCompletion = () => {
     return Math.max(0, Math.ceil((REVIEW_WINDOW_MS - elapsed) / 1000));
   };
 
-  const [autoConfirmCountdown, setAutoConfirmCountdown] = useState<number>(
-    () => getRemainingSeconds(),
+  const [autoConfirmCountdown, setAutoConfirmCountdown] = useState<number>(() =>
+    getRemainingSeconds(),
   );
 
   const handleAutoConfirm = useCallback(async () => {
@@ -227,7 +227,7 @@ const ReviewCompletion = () => {
                 ]}
               >
                 <Text style={[styles.noteText, { color: colors.text }]}>
-                  {errand.completionNote || "No note provided."}
+                  {errand.proofNote || "No note provided."}
                 </Text>
               </View>
               <Text style={[styles.noteMeta, { color: colors.textTertiary }]}>
@@ -261,6 +261,107 @@ const ReviewCompletion = () => {
             />
           </View>
         </View>
+
+        {errand.type === "HANDS_ON_HELP" &&
+          errand.startedAt &&
+          errand.finalCost != null && (
+            <View
+              style={[
+                styles.verificationCard,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[styles.verificationTitle, { color: colors.text }]}>
+                Time Summary
+              </Text>
+              {(() => {
+                // Derive billed time from the stored finalCost — same source of truth the backend used
+                const agreedRate = errand.agreedPrice;
+                const billedHours = errand.finalCost! / agreedRate;
+                const billedMins = Math.round(billedHours * 60);
+                const h = Math.floor(billedMins / 60);
+                const m = billedMins % 60;
+                const timeStr =
+                  h > 0 ? `${h}h ${m > 0 ? `${m}m` : ""}`.trim() : `${m}m`;
+                return (
+                  <>
+                    <View style={styles.checkRow}>
+                      <Text
+                        style={[
+                          styles.checkText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Time worked (billed)
+                      </Text>
+                      <Text
+                        style={[
+                          styles.checkText,
+                          { color: colors.text, fontWeight: "600" },
+                        ]}
+                      >
+                        {timeStr}
+                      </Text>
+                    </View>
+                    <View style={styles.checkRow}>
+                      <Text
+                        style={[
+                          styles.checkText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Hourly rate
+                      </Text>
+                      <Text
+                        style={[
+                          styles.checkText,
+                          { color: colors.text, fontWeight: "600" },
+                        ]}
+                      >
+                        £{errand.agreedPrice!.toFixed(2)}
+                        /hr
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.checkRow,
+                        {
+                          borderTopWidth: 1,
+                          borderTopColor: colors.border,
+                          marginTop: 4,
+                          paddingTop: 12,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.checkText,
+                          {
+                            color: colors.text,
+                            fontWeight: "700",
+                            fontSize: 16,
+                          },
+                        ]}
+                      >
+                        Total
+                      </Text>
+                      <Text
+                        style={[
+                          {
+                            color: colors.primary,
+                            fontWeight: "700",
+                            fontSize: 18,
+                          },
+                        ]}
+                      >
+                        £{errand.finalCost.toFixed(2)}
+                      </Text>
+                    </View>
+                  </>
+                );
+              })()}
+            </View>
+          )}
 
         {/* Actions */}
         {errand.status === "REVIEWING" && (

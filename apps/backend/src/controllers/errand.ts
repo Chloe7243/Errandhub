@@ -6,6 +6,7 @@ import { activeStatuses, createErrandSchema } from "@errandhub/shared";
 import { startErrandMatching } from "../services/matching";
 import { emitToUser } from "../lib/socket";
 import { notifyUser } from "../lib/notifications";
+import { stripe } from "../lib/stripe";
 
 export const createErrand = async (
   req: AuthRequest,
@@ -20,14 +21,15 @@ export const createErrand = async (
     const {
       title,
       description,
-      pickupLocation,
-      dropoffLocation,
-      pickupReference,
+      firstLocation,
+      finalLocation,
+      locationReference,
       type,
-      pickupLat,
-      pickupLng,
-      dropoffLat,
-      dropoffLng,
+      firstLat,
+      firstLng,
+      finalLat,
+      finalLng,
+      estimatedDuration,
     } = parsed.data;
 
     const activeErrandCount = await prisma.errand.count({
@@ -51,53 +53,19 @@ export const createErrand = async (
         requesterId: req.userId!,
         title,
         description,
-        pickupLocation,
-        dropoffLocation,
-        pickupReference,
+        firstLocation,
+        finalLocation: finalLocation ?? firstLocation,
+        locationReference,
         suggestedPrice,
-        pickupLat,
-        pickupLng,
-        dropoffLat,
-        dropoffLng,
+        estimatedDuration: estimatedDuration ?? null,
+        firstLat,
+        firstLng,
+        finalLat,
+        finalLng,
       },
     });
-
-    await startErrandMatching(errand);
 
     res.status(201).json({ errand, message: "Errand created successfully" });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const getPostedErrands = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const errands = await prisma.errand.findMany({
-      where: {
-        status: "POSTED",
-        requesterId: { not: req.userId },
-      },
-      orderBy: { createdAt: "desc" },
-      include: {
-        requester: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatarUrl: true,
-          },
-        },
-        offers: {
-          where: { helperId: req.userId },
-        },
-      },
-    });
-
-    res.status(200).json({ errands });
   } catch (error) {
     next(error);
   }
@@ -114,18 +82,6 @@ export const getErrandById = async (
     const errand = await prisma.errand.findUnique({
       where: { id },
       include: {
-        offers: {
-          include: {
-            helper: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
         helper: {
           select: {
             id: true,
@@ -156,150 +112,118 @@ export const getErrandById = async (
   }
 };
 
-export const submitOffer = async (
+export const setPaymentMethod = async (
   req: AuthRequest<{ id: string }>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
     const { id } = req.params;
-    const { amount } = req.body;
+    const { paymentMethodId } = req.body;
 
-    if (!amount || amount <= 0) throw new AppError("Invalid offer amount", 400);
-
-    const errand = await prisma.errand.findUnique({ where: { id } });
-    if (!errand) throw new AppError("Errand not found", 404);
-    if (errand.status !== "POSTED")
-      throw new AppError("Errand is no longer available", 400);
-
-    // check if helper already submitted an offer
-    const existingOffer = await prisma.errandOffer.findFirst({
-      where: { errandId: id, helperId: req.userId },
-    });
-    if (existingOffer)
-      throw new AppError("You have already submitted an offer", 400);
-
-    const offer = await prisma.errandOffer.create({
-      data: {
-        errandId: id,
-        helperId: req.userId!,
-        amount,
-      },
-    });
-
-    res.status(201).json({ offer, message: "Offer submitted successfully" });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const acceptOffer = async (
-  req: AuthRequest<{ id: string; offerId: string }>,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const { id, offerId } = req.params;
+    if (!paymentMethodId)
+      throw new AppError("paymentMethodId is required", 400);
 
     const errand = await prisma.errand.findUnique({ where: { id } });
     if (!errand) throw new AppError("Errand not found", 404);
     if (errand.requesterId !== req.userId)
       throw new AppError("Unauthorised", 403);
+    if (errand.stripePaymentIntentId)
+      throw new AppError("Payment already authorised for this errand", 400);
 
-    const offer = await prisma.errandOffer.findUnique({
-      where: { id: offerId },
+    await prisma.errand.update({
+      where: { id },
+      data: { paymentMethodId },
     });
-    if (!offer) throw new AppError("Offer not found", 404);
 
-    await prisma.$transaction([
-      prisma.errandOffer.update({
-        where: { id: offerId },
-        data: { status: "ACCEPTED" },
-      }),
-      prisma.errandOffer.updateMany({
-        where: { errandId: id, id: { not: offerId } },
-        data: { status: "DECLINED" },
-      }),
-      prisma.errand.update({
-        where: { id },
-        data: {
-          status: "ACCEPTED",
-          helperId: offer.helperId,
-          agreedPrice: offer.amount,
-        },
-      }),
-    ]);
+    await startErrandMatching(errand);
 
-    res.status(200).json({ message: "Offer accepted successfully" });
+    res.status(200).json({ message: "Payment method saved" });
   } catch (error) {
     next(error);
   }
 };
 
-export const declineOffer = async (
-  req: AuthRequest<{ offerId: string }>,
+export const startWork = async (
+  req: AuthRequest<{ id: string }>,
   res: Response,
   next: NextFunction,
 ) => {
   try {
-    const { offerId } = req.params;
+    const { id } = req.params;
 
-    const offer = await prisma.errandOffer.findUnique({
-      where: { id: offerId },
-    });
-    if (!offer) throw new AppError("Offer not found", 404);
-
-    await prisma.errandOffer.update({
-      where: { id: offerId },
-      data: { status: "DECLINED" },
-    });
-
-    res.status(200).json({ message: "Offer declined successfully" });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const acceptErrand = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const errand = await prisma.errand.findUnique({
-      where: { id: req.params.id },
-    });
-
+    const errand = await prisma.errand.findUnique({ where: { id } });
     if (!errand) throw new AppError("Errand not found", 404);
-    if (errand.status !== "POSTED")
-      throw new AppError("Errand is no longer available", 400);
-
-    const activeErrand = await prisma.errand.findFirst({
-      where: {
-        helperId: req.userId,
-        status: { in: ["ACCEPTED", "IN_PROGRESS", "REVIEWING"] },
-      },
-    });
-
-    if (activeErrand)
-      throw new AppError("You already have an active errand", 400);
+    if (errand.type !== "HANDS_ON_HELP")
+      throw new AppError("Only applicable to Hands-On Help errands", 400);
+    if (errand.helperId !== req.userId) throw new AppError("Unauthorised", 403);
+    if (errand.status !== "IN_PROGRESS")
+      throw new AppError("Errand is not in progress", 400);
+    if (errand.startedAt) throw new AppError("Work already started", 400);
 
     const updated = await prisma.errand.update({
-      where: { id: req.params.id },
-      data: {
-        status: "IN_PROGRESS",
-        helperId: req.userId,
-        agreedPrice: errand.suggestedPrice,
-      },
+      where: { id },
+      data: { startedAt: new Date() },
     });
 
-    emitToUser(errand.requesterId, "errand_assigned", {
-      errandId: updated.id,
+    emitToUser(errand.requesterId, "work_started", { errandId: id });
+    await notifyUser(errand.requesterId, {
+      title: "Work started",
+      body: "Your helper has arrived and started working on your errand.",
+      data: { errandId: id },
     });
 
-    res.json({ errand: updated });
-  } catch (err) {
-    next(err);
+    res.status(200).json({ errand: updated });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const extendWork = async (
+  req: AuthRequest<{ id: string }>,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id } = req.params;
+    const { additionalHours } = req.body;
+
+    if (!additionalHours || additionalHours <= 0 || additionalHours > 8)
+      throw new AppError("additionalHours must be between 0.5 and 8", 400);
+
+    const errand = await prisma.errand.findUnique({ where: { id } });
+    if (!errand) throw new AppError("Errand not found", 404);
+    if (errand.type !== "HANDS_ON_HELP")
+      throw new AppError("Only applicable to Hands-On Help errands", 400);
+    if (errand.helperId !== req.userId) throw new AppError("Unauthorised", 403);
+    if (errand.status !== "IN_PROGRESS")
+      throw new AppError("Errand is not in progress", 400);
+    if (!errand.startedAt) throw new AppError("Work has not been started", 400);
+
+    const newDuration = (errand.estimatedDuration ?? 0) + additionalHours;
+
+    await prisma.errand.update({
+      where: { id },
+      data: { estimatedDuration: newDuration },
+    });
+
+    const hrs = additionalHours === 1 ? "1 hour" : `${additionalHours} hours`;
+    emitToUser(errand.requesterId, "errand_extended", {
+      errandId: id,
+      additionalHours,
+      newDuration,
+    });
+    await notifyUser(errand.requesterId, {
+      title: "Job extended",
+      body: `Your helper has extended the job by ${hrs}.`,
+      data: { errandId: id },
+    });
+
+    res
+      .status(200)
+      .json({ message: "Duration extended", estimatedDuration: newDuration });
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -346,29 +270,55 @@ export const updateErrandStatus = async (
       throw new AppError("Only the requester can perform this action", 403);
     }
 
+    let finalCost: number | undefined;
+    if (status === "REVIEWING" && errand.type === "HANDS_ON_HELP") {
+      if (!errand.startedAt)
+        throw new AppError("Work has not been started yet", 400);
+      const elapsedMs = Date.now() - new Date(errand.startedAt).getTime();
+      const elapsedMinutes = elapsedMs / 60000;
+      const billedMinutes = Math.ceil(elapsedMinutes / 15) * 15;
+      const billedHours = billedMinutes / 60;
+      finalCost =
+        Math.round(
+          billedHours * (errand.agreedPrice ?? errand.suggestedPrice!) * 100,
+        ) / 100;
+    }
+
+    if (status === "REVIEWING" && errand.type === "PICKUP_DELIVERY")
+      finalCost = errand.agreedPrice ?? errand.suggestedPrice!;
     const updatedErrand = await prisma.errand.update({
       where: { id },
       data: {
         status,
         ...(status === "REVIEWING" && { proofImageUrl, proofNote }),
+        ...(finalCost !== undefined && { finalCost }),
         ...(status === "COMPLETED" && { completedAt: new Date() }),
-        ...(status === "POSTED" && {
-          helperId: null,
-          reviewWindowExpiresAt: null,
-        }),
-        ...(status === "EXPIRED" && {
-          helperId: null,
-          reviewWindowExpiresAt: null,
-        }),
+        ...(status === "POSTED" && { helperId: null }),
+        ...(status === "EXPIRED" && { helperId: null }),
       },
     });
+
+    if (status === "COMPLETED" && updatedErrand.stripePaymentIntentId) {
+      const captureAmount =
+        errand.type === "HANDS_ON_HELP" && updatedErrand.finalCost
+          ? { amount_to_capture: Math.round(updatedErrand.finalCost * 100) }
+          : {};
+      await stripe.paymentIntents.capture(
+        updatedErrand.stripePaymentIntentId,
+        captureAmount,
+      );
+    }
+
+    if (status === "CANCELLED" && updatedErrand.stripePaymentIntentId) {
+      await stripe.paymentIntents.cancel(updatedErrand.stripePaymentIntentId);
+    }
 
     if (status === "REVIEWING") {
       emitToUser(updatedErrand.requesterId, "proof_submitted", {
         errandId: updatedErrand.id,
       });
       await notifyUser(updatedErrand.requesterId, {
-        title: "Proof submitted 📸",
+        title: "Proof submitted",
         body: "Your helper has marked the errand complete. Please review.",
         data: { errandId: updatedErrand.id },
       });
@@ -379,7 +329,7 @@ export const updateErrandStatus = async (
         errandId: updatedErrand.id,
       });
       await notifyUser(updatedErrand.helperId, {
-        title: "Payment released 💸",
+        title: "Payment released",
         body: "The requester confirmed your errand. Great work!",
         data: { errandId: updatedErrand.id },
       });

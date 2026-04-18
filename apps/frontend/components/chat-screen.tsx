@@ -227,13 +227,13 @@ const ChatScreen = ({
             },
           ]}
         >
-          <TouchableOpacity style={styles.iconButton}>
+          {/* <TouchableOpacity style={styles.iconButton}>
             <Ionicons
               name="image-outline"
               size={24}
               color={colors.textTertiary}
             />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
           <TextInput
             value={input}
             onChangeText={setInput}

@@ -6,6 +6,7 @@ export const TAGS: constantsObj = {
   HELPED_ERRANDS: "helped errands",
   REQUESTED_ERRANDS: "requested errands",
   ERRAND: "errand",
+  PAYMENT_METHODS: "payment methods",
 };
 
 export const STATUS_COLORS: constantsObj = {

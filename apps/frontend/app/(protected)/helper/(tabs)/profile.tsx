@@ -8,8 +8,10 @@ import {
   useGetHelpedErrandsQuery,
   useGetSettingsQuery,
   useUpdateSettingsMutation,
+  useUpdateAvatarMutation,
 } from "@/store/api/user";
-import { logoutUser } from "@/store/slices";
+import * as ImagePicker from "expo-image-picker";
+import { logoutUser, updateUserState } from "@/store/slices";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { useThemePreference } from "@/hooks/use-theme-preference";
@@ -29,6 +31,7 @@ import { displayErrorMessage } from "@/utils/errors";
 import { User } from "@/types";
 import AvailabilityToggle from "@/components/availability-toggle";
 import SwitchRole from "@/components/switch-role";
+import { activeStatuses } from "@errandhub/shared";
 
 type RadiusOption = 0.5 | 1 | 2 | 5;
 const RADIUS_OPTIONS: RadiusOption[] = [0.5, 1, 2, 5];
@@ -73,10 +76,54 @@ const HelperSettings = () => {
   const [currentSettings, setCurrentSettings] =
     useState<Settings>(DEFAULT_SETTINGS);
 
+  const [updateAvatar, { isLoading: isUploadingAvatar }] =
+    useUpdateAvatarMutation();
+
+  const handleAvatarPress = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Toast.show({ type: "error", text1: "Camera roll permission required" });
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      shape: "oval",
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+
+    const localUri = result.assets[0].uri;
+    try {
+      const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME ?? "";
+      const uploadPreset =
+        process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? "";
+      const filename = localUri.split("/").pop() ?? "avatar.jpg";
+      const type = filename.endsWith(".png") ? "image/png" : "image/jpeg";
+      const formData = new FormData();
+      formData.append("file", { uri: localUri, name: filename, type } as any);
+      formData.append("upload_preset", uploadPreset);
+
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        { method: "POST", body: formData },
+      );
+      if (!res.ok) throw new Error("Upload failed");
+      const { secure_url } = await res.json();
+
+      await updateAvatar(secure_url).unwrap();
+      dispatch(updateUserState({ avatarUrl: secure_url }));
+      Toast.show({ type: "success", text1: "Avatar updated" });
+    } catch {
+      Toast.show({ type: "error", text1: "Failed to update avatar" });
+    }
+  };
+
   const { currentData: settingsData, isLoading } = useGetSettingsQuery(null);
   const [updateSettings, { isLoading: isSaving }] = useUpdateSettingsMutation();
   const { data: activeErrandsData } = useGetHelpedErrandsQuery({
-    status: ["ACCEPTED", "IN_PROGRESS", "REVIEWING"] as any,
+    status: activeStatuses,
   });
 
   useEffect(() => {
@@ -161,11 +208,30 @@ const HelperSettings = () => {
                   },
                 ]}
               >
-                <Avatar
-                  firstName={user?.firstName ?? ""}
-                  lastName={user?.lastName ?? ""}
-                  size={56}
-                />
+                <TouchableOpacity
+                  onPress={handleAvatarPress}
+                  disabled={isUploadingAvatar}
+                  style={{ position: "relative" }}
+                >
+                  <Avatar
+                    firstName={user?.firstName ?? ""}
+                    lastName={user?.lastName ?? ""}
+                    uri={user?.avatarUrl ?? undefined}
+                    size={56}
+                  />
+                  <View
+                    style={[
+                      styles.avatarEditBadge,
+                      { backgroundColor: colors.primary },
+                    ]}
+                  >
+                    {isUploadingAvatar ? (
+                      <LoadingSpinner customSize={0.7} color="#fff" />
+                    ) : (
+                      <Ionicons name="camera-outline" size={11} color="#fff" />
+                    )}
+                  </View>
+                </TouchableOpacity>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.profileName, { color: colors.text }]}>
                     {user?.firstName} {user?.lastName}
@@ -359,10 +425,10 @@ const HelperSettings = () => {
               ))}
             </ExpandableSection>
 
-            {/* Payment Methods */}
+            {/* Bank Details */}
             <ExpandableSection
-              icon="card-outline"
-              label="Payment Methods"
+              icon="business-outline"
+              label="Bank Details"
               expanded={isPaymentExpanded}
               containerStyle={{ paddingHorizontal: 14, paddingTop: 18 }}
               onPress={() => setIsPaymentExpanded((prev) => !prev)}
@@ -377,31 +443,20 @@ const HelperSettings = () => {
                 ]}
               >
                 <Ionicons
-                  name="card-outline"
+                  name="information-circle-outline"
                   size={20}
-                  color={colors.textSecondary}
+                  color={colors.primary}
                 />
-                <Text style={[styles.cardText, { color: colors.text }]}>
-                  •••• •••• •••• 4242
-                </Text>
-                <Text style={[styles.cardBadge, { color: colors.primary }]}>
-                  Default
+                <Text
+                  style={[
+                    styles.cardText,
+                    { color: colors.textSecondary, fontSize: 13 },
+                  ]}
+                >
+                  Bank details are collected securely when you receive your
+                  first payout via Stripe.
                 </Text>
               </View>
-              <TouchableOpacity
-                style={[
-                  styles.addButton,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Ionicons name="add" size={18} color={colors.text} />
-                <Text style={[styles.addButtonText, { color: colors.text }]}>
-                  Add Payment Method
-                </Text>
-              </TouchableOpacity>
             </ExpandableSection>
 
             {/* Account */}
@@ -497,6 +552,18 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
+  },
+  avatarEditBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
   },
   profileName: { fontSize: 16, fontWeight: "700", marginBottom: 2 },
   profileEmail: { fontSize: 13 },

@@ -58,6 +58,7 @@ const Home = () => {
             <Avatar
               firstName={user?.firstName}
               lastName={user?.lastName}
+              uri={user?.avatarUrl ?? undefined}
               size={50}
             />
             <View>
@@ -151,7 +152,7 @@ const Home = () => {
                   type={errand?.type}
                   status={errand?.status}
                   title={errand?.title}
-                  location={errand?.pickupLocation}
+                  location={errand?.firstLocation}
                   amount={errand?.agreedPrice}
                   helperFirstName={errand?.helper?.firstName}
                   helperLastName={errand?.helper?.lastName}

@@ -67,18 +67,6 @@ export const getRequestedErrands = async (
       },
       orderBy: { createdAt: "desc" },
       include: {
-        offers: {
-          include: {
-            helper: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatarUrl: true,
-              },
-            },
-          },
-        },
         helper: {
           select: {
             id: true,
@@ -110,21 +98,20 @@ export const getHelpedErrands = async (
           : (status as string).split(",")) as ErrandStatus[])
       : undefined;
 
-    // Always fetch all terminal errands so we can compute accurate summary totals
-    // regardless of which filter the client has active.
     const allTerminal = await prisma.errand.findMany({
       where: {
         helperId: req.userId,
         status: { in: ["COMPLETED", "DISPUTED"] },
       },
-      select: { status: true, agreedPrice: true, suggestedPrice: true },
+      select: { status: true, finalCost: true },
     });
 
     const summary = {
       totalEarned: allTerminal
         .filter((e) => e.status === "COMPLETED")
-        .reduce((sum, e) => sum + (e.agreedPrice ?? e.suggestedPrice ?? 0), 0),
-      totalCompleted: allTerminal.filter((e) => e.status === "COMPLETED").length,
+        .reduce((sum, e) => sum + (e.finalCost ?? 0), 0),
+      totalCompleted: allTerminal.filter((e) => e.status === "COMPLETED")
+        .length,
       totalDisputed: allTerminal.filter((e) => e.status === "DISPUTED").length,
     };
 
@@ -183,6 +170,27 @@ export const savePushToken = async (
     });
 
     res.status(200).json({ message: "Push token saved" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateAvatar = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { avatarUrl } = req.body;
+    if (!avatarUrl) throw new AppError("avatarUrl is required", 400);
+
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: { avatarUrl },
+      select: { avatarUrl: true },
+    });
+
+    res.status(200).json({ avatarUrl: user.avatarUrl });
   } catch (error) {
     next(error);
   }

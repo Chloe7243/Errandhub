@@ -61,7 +61,7 @@ const Emergency = () => {
 
             {/* Actions */}
             <View style={styles.actions}>
-              <TouchableOpacity
+              {/* <TouchableOpacity
                 style={[styles.actionButton, { backgroundColor: colors.error }]}
               >
                 <Ionicons name="shield-outline" size={18} color={colors.text} />
@@ -72,7 +72,7 @@ const Emergency = () => {
                 >
                   Alert Admin Immediately
                 </Text>
-              </TouchableOpacity>
+              </TouchableOpacity> */}
 
               <TouchableOpacity
                 style={[

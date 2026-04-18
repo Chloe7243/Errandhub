@@ -145,7 +145,7 @@ const ErrandHistory = () => {
             type={item.type}
             status={item.status}
             title={item.title}
-            location={item.pickupLocation}
+            location={item.firstLocation}
             amount={item.agreedPrice ?? item.suggestedPrice}
             onPress={() =>
               router.push(`/requester/errand-details?id=${item.id}`)

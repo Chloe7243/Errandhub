@@ -56,10 +56,14 @@ const DispatchRequestModal = ({
     const interval = setInterval(() => {
       const remaining = getRemaining();
       setCountdownSeconds(remaining);
-      if (remaining <= 0) clearInterval(interval);
+      if (remaining <= 0) {
+        clearInterval(interval);
+        onDecline();
+      }
     }, 1000);
 
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [helperRequest]);
 
   useEffect(() => {
@@ -133,12 +137,24 @@ const DispatchRequestModal = ({
             <Text style={[styles.modalText, { color: colors.text }]}>
               {helperRequest.title}
             </Text>
-            <Text style={[styles.modalInfo, { color: colors.textSecondary }]}>
-              Pickup: {helperRequest.pickupLocation}
-            </Text>
-            <Text style={[styles.modalInfo, { color: colors.textSecondary }]}>
-              Drop-off: {helperRequest.dropoffLocation}
-            </Text>
+            {helperRequest.type === "HANDS_ON_HELP" ? (
+              <Text style={[styles.modalInfo, { color: colors.textSecondary }]}>
+                Location: {helperRequest.firstLocation}
+              </Text>
+            ) : (
+              <>
+                <Text
+                  style={[styles.modalInfo, { color: colors.textSecondary }]}
+                >
+                  Pickup: {helperRequest.firstLocation}
+                </Text>
+                <Text
+                  style={[styles.modalInfo, { color: colors.textSecondary }]}
+                >
+                  Drop-off: {helperRequest.finalLocation}
+                </Text>
+              </>
+            )}
             <Text style={[styles.modalInfo, { color: colors.textSecondary }]}>
               Suggested: £{helperRequest.suggestedPrice?.toFixed(2)}
             </Text>

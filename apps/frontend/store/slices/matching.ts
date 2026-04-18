@@ -12,9 +12,9 @@ export type ErrandRequestPayload = {
   errandId: string;
   title: string;
   description: string;
-  pickupLocation: string;
-  dropoffLocation: string;
-  pickupReference?: string | null;
+  firstLocation: string;
+  finalLocation: string;
+  locationReference?: string | null;
   suggestedPrice: number;
   type: string;
   requester: {

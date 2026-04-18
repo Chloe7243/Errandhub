@@ -3,6 +3,7 @@ import { Errand } from "../../generated/prisma";
 import { activeStatuses } from "@errandhub/shared";
 import { emitToUser, getConnectedHelpers } from "../lib/socket";
 import { notifyUser } from "../lib/notifications";
+import { authorizeErrandPayment } from "../controllers/payment";
 
 // formula to calculate short distance between 2 points in km
 const haversineKm = (
@@ -100,14 +101,14 @@ const scheduleHelper = async (errandId: string) => {
 
   // Filter by notification radius when both the helper and errand have coordinates
   const inRangeHelpers = connectedHelpers.filter(({ userId, coordinates }) => {
-    if (!coordinates || !errand.pickupLat || !errand.pickupLng) return true;
+    if (!coordinates || !errand.firstLat || !errand.firstLng) return true;
     const radius = availableMap.get(userId) ?? 2;
     return (
       haversineKm(
         coordinates.lat,
         coordinates.lng,
-        errand.pickupLat,
-        errand.pickupLng,
+        errand.firstLat,
+        errand.firstLng,
       ) <= radius
     );
   });
@@ -151,10 +152,11 @@ const scheduleHelper = async (errandId: string) => {
     errandId: errand.id,
     title: errand.title,
     description: errand.description,
-    pickupLocation: errand.pickupLocation,
-    dropoffLocation: errand.dropoffLocation,
-    pickupReference: errand.pickupReference,
-    suggestedPrice: errand.suggestedPrice ?? 0,
+    firstLocation: errand.firstLocation,
+    finalLocation: errand.finalLocation,
+    locationReference: errand.locationReference,
+    suggestedPrice: errand.suggestedPrice!,
+    estimatedDuration: errand.estimatedDuration ?? null,
     type: errand.type,
     requester: {
       id: errand.requester.id,
@@ -255,7 +257,7 @@ export const helperCounterOffer = async (
   const errand = await prisma.errand.findUnique({ where: { id: errandId } });
   if (!errand || errand.status !== "POSTED") return;
 
-  const minAmount = errand.suggestedPrice ?? 0;
+  const minAmount = errand.suggestedPrice ?? 1;
   const maxAmount = minAmount * 2;
   if (
     amount < minAmount ||
@@ -348,11 +350,9 @@ export const helperDeclineErrand = async (
 export const confirmHelper = async (errandId: string, amount?: number) => {
   const state = matchingState.get(errandId);
 
-  console.log({ state });
   if (!state || !state.currentHelperId) return;
 
   const errand = await prisma.errand.findUnique({ where: { id: errandId } });
-  console.log({ errand });
   if (!errand || errand.status !== "POSTED") {
     expireErrand(errandId);
     cleanupMatchingState(errandId);
@@ -363,10 +363,16 @@ export const confirmHelper = async (errandId: string, amount?: number) => {
     where: { id: errandId },
     data: {
       helperId: state.currentHelperId,
-      agreedPrice: amount ?? errand.suggestedPrice ?? 0,
+      agreedPrice: amount ?? errand.suggestedPrice,
       status: "IN_PROGRESS",
     },
   });
+
+  try {
+    await authorizeErrandPayment(updated);
+  } catch (err) {
+    console.error("Payment authorization failed in matching:", err);
+  }
 
   emitToUser(state.currentHelperId, "errand_assigned", {
     errandId: updated.id,

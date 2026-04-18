@@ -7,18 +7,19 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
   useGetErrandByIdQuery,
-  useSubmitOfferMutation,
-  useAcceptErrandMutation,
+  useStartWorkMutation,
+  useExtendWorkMutation,
 } from "@/store/api/errand";
 import { formatErrandType, formatErrandStatus } from "@/utils/errand";
 import { STATUS_COLORS } from "@/utils/constants";
 import { displayErrorMessage } from "@/utils/errors";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   KeyboardAvoidingView,
   Linking,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -34,6 +35,7 @@ import {
   clearProgress,
   parseChecklist,
 } from "@/store/slices/checklist";
+import { formatTimeRemaining } from "@/utils/time";
 
 const HelperErrandDetails = () => {
   const router = useRouter();
@@ -42,8 +44,12 @@ const HelperErrandDetails = () => {
   const colors = Colors[colorScheme ?? "dark"];
   const { id } = useLocalSearchParams<{ id: string }>();
 
-  const [offerAmount, setOfferAmount] = useState("");
-  const [showNegotiate, setShowNegotiate] = useState(false);
+  const [startWork, { isLoading: isStarting }] = useStartWorkMutation();
+  const [extendWork, { isLoading: isExtending }] = useExtendWorkMutation();
+  const [showOvertimeModal, setShowOvertimeModal] = useState(false);
+  const [selectedExtension, setSelectedExtension] = useState(1);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const overtimeTriggeredRef = useRef(false);
 
   const {
     currentData: data,
@@ -52,87 +58,114 @@ const HelperErrandDetails = () => {
   } = useGetErrandByIdQuery(id!, {
     refetchOnMountOrArgChange: true,
   });
-  const [submitOffer, { isLoading: isSubmitting }] = useSubmitOfferMutation();
-  const [acceptErrand, { isLoading: isAccepting }] = useAcceptErrandMutation();
-
   const errand = data?.errand;
-  const isPosted = errand?.status === "POSTED";
   const isActive = errand?.status === "IN_PROGRESS";
-  const hasOffer = errand?.offers?.length > 0;
-  const myOffer = errand?.offers?.[0];
+  const isHandsOn = errand?.type === "HANDS_ON_HELP";
+  const workStarted = !!errand?.startedAt;
+
   const displayAmount = errand?.agreedPrice ?? errand?.suggestedPrice;
-  const basePrice = errand?.suggestedPrice || 5;
-  const maxPrice = basePrice * 2;
 
   const checklistItems = errand ? parseChecklist(errand.description) : [];
   const checklistProgress = useAppSelector(
     (state) => state.checklist.progress[id!] ?? [],
   );
+
   const checkedCount = checklistProgress.filter(Boolean).length;
-
-  const handleAccept = async () => {
-    try {
-      await acceptErrand(id).unwrap();
-      Toast.show({ type: "success", text1: "Errand accepted" });
-    } catch (err) {
-      displayErrorMessage(err);
-    }
-  };
-
-  const handleDecline = () => {
-    try {
-      // socket.emit("decline_errand", { errandId, helperId: user.userId });
-      router.back();
-    } catch (err) {
-      displayErrorMessage(err);
-    }
-  };
-
-  const handleSubmitOffer = async () => {
-    const amount = parseFloat(offerAmount);
-    if (!amount || amount <= 0) {
-      Toast.show({ type: "error", text1: "Please enter a valid amount" });
-      return;
-    }
-    try {
-      await submitOffer({ errandId: id!, offerAmount: amount }).unwrap();
-      Toast.show({ type: "success", text1: "Offer sent" });
-      setOfferAmount("");
-      setShowNegotiate(false);
-    } catch (err) {
-      displayErrorMessage(err);
-    }
-  };
+  const allChecked =
+    checklistItems.length === 0 || checkedCount === checklistItems.length;
+  // Checklist is interactive only once work has begun
+  const checklistLocked = isHandsOn ? !workStarted : !isActive;
 
   const handleMarkComplete = () => {
+    if (isHandsOn && !workStarted) {
+      Toast.show({
+        type: "error",
+        text1: "Start work before marking complete",
+      });
+      return;
+    }
+    if (!allChecked) {
+      Toast.show({
+        type: "error",
+        text1: "Checklist incomplete",
+        text2: `${checklistItems.length - checkedCount} item${checklistItems.length - checkedCount !== 1 ? "s" : ""} still left to tick off`,
+      });
+      return;
+    }
     if (id) dispatch(clearProgress(id));
     router.push(`/helper/upload-proof?errandId=${id}`);
   };
 
+  useEffect(() => {
+    if (!isHandsOn || !workStarted || !errand?.startedAt) return;
+
+    overtimeTriggeredRef.current = false;
+
+    const tick = () => {
+      const elapsed = Math.floor(
+        (Date.now() - new Date(errand.startedAt!).getTime()) / 1000,
+      );
+      setElapsedSeconds(elapsed);
+
+      const estimatedSecs = (errand.estimatedDuration ?? 0) * 3600;
+      if (
+        estimatedSecs > 0 &&
+        elapsed >= estimatedSecs &&
+        !overtimeTriggeredRef.current
+      ) {
+        overtimeTriggeredRef.current = true;
+        setShowOvertimeModal(true);
+      }
+
+      // Auto-complete safety net at 2× estimated
+      const doubleEstimated = estimatedSecs * 2;
+      if (doubleEstimated > 0 && elapsed >= doubleEstimated) {
+        handleMarkComplete();
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [errand?.startedAt, errand?.estimatedDuration]);
+
+  const handleStartWork = async () => {
+    try {
+      await startWork(id!).unwrap();
+      Toast.show({
+        type: "success",
+        text1: "Timer started — work begins now!",
+      });
+    } catch (err) {
+      displayErrorMessage(err);
+    }
+  };
+
+  const handleExtend = async () => {
+    try {
+      await extendWork({
+        errandId: id!,
+        additionalHours: selectedExtension,
+      }).unwrap();
+      overtimeTriggeredRef.current = false;
+      setShowOvertimeModal(false);
+      Toast.show({
+        type: "success",
+        text1: `Extended by ${selectedExtension} hour${selectedExtension !== 1 ? "s" : ""}`,
+      });
+    } catch (err) {
+      displayErrorMessage(err);
+    }
+  };
+
   const handleNavigate = () => {
-    if (!errand?.pickupLat || !errand?.pickupLng) return;
+    if (!errand?.firstLat || !errand?.firstLng) return;
     const url =
       Platform.OS === "ios"
-        ? `maps:?daddr=${errand.pickupLat},${errand.pickupLng}`
-        : `geo:${errand.pickupLat},${errand.pickupLng}?q=${errand.pickupLat},${errand.pickupLng}`;
+        ? `maps:?daddr=${errand.firstLat},${errand.firstLng}`
+        : `geo:${errand.firstLat},${errand.firstLng}?q=${errand.firstLat},${errand.firstLng}`;
     Linking.openURL(url);
   };
-
-  const adjustOffer = (direction: "up" | "down") => {
-    const current = parseFloat(offerAmount) || basePrice;
-    if (direction === "up" && current + 0.5 <= maxPrice) {
-      setOfferAmount((current + 0.5).toFixed(2));
-    }
-    if (direction === "down" && current - 0.5 >= basePrice) {
-      setOfferAmount((current - 0.5).toFixed(2));
-    }
-  };
-
-  const currentOffer = parseFloat(offerAmount) || basePrice;
-  const fillPercent =
-    maxPrice > basePrice
-      ? ((currentOffer - basePrice) / (maxPrice - basePrice)) * 100
-      : 0;
 
   if (isLoading) return <LoadingSpinner fullScreen />;
   if (isError || !errand)
@@ -163,12 +196,12 @@ const HelperErrandDetails = () => {
           <View
             style={[styles.mapSection, { borderBottomColor: colors.border }]}
           >
-            {errand.pickupLat && errand.pickupLng ? (
+            {errand.firstLat && errand.firstLng ? (
               <MapPreview
-                pickupLat={errand.pickupLat}
-                pickupLng={errand.pickupLng}
-                dropoffLat={errand.dropoffLat ?? undefined}
-                dropoffLng={errand.dropoffLng ?? undefined}
+                firstLat={errand.firstLat}
+                firstLng={errand.firstLng}
+                finalLat={errand.finalLat ?? undefined}
+                finalLng={errand.finalLng ?? undefined}
               />
             ) : (
               <View
@@ -192,11 +225,11 @@ const HelperErrandDetails = () => {
                 styles.navigateBtn,
                 {
                   backgroundColor: colors.primary,
-                  opacity: errand.pickupLat ? 1 : 0.4,
+                  opacity: errand.firstLat ? 1 : 0.4,
                 },
               ]}
               onPress={handleNavigate}
-              disabled={!errand.pickupLat}
+              disabled={!errand.firstLat}
             >
               <Ionicons name="navigate-outline" size={14} color="#fff" />
               <Text style={styles.navigateBtnText}>Navigate to Pickup</Text>
@@ -242,6 +275,7 @@ const HelperErrandDetails = () => {
               </Text>
               <Text style={[styles.taskPrice, { color: colors.primary }]}>
                 £{displayAmount?.toFixed(2) ?? "—"}
+                {isHandsOn ? "/hr" : ""}
               </Text>
             </View>
 
@@ -255,6 +289,21 @@ const HelperErrandDetails = () => {
                 {new Date(errand.createdAt).toLocaleDateString()}
               </Text>
             </View>
+            {isHandsOn && errand.estimatedDuration && (
+              <View style={styles.metaRow}>
+                <Ionicons
+                  name="hourglass-outline"
+                  size={13}
+                  color={colors.textSecondary}
+                />
+                <Text
+                  style={[styles.metaText, { color: colors.textSecondary }]}
+                >
+                  Est. {errand.estimatedDuration} hour
+                  {errand.estimatedDuration !== 1 ? "s" : ""}
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -314,19 +363,51 @@ const HelperErrandDetails = () => {
                 <Text
                   style={[
                     styles.checklistCount,
-                    { color: colors.textTertiary },
+                    {
+                      color: allChecked ? colors.success : colors.textTertiary,
+                      fontWeight: allChecked ? "700" : "500",
+                    },
                   ]}
                 >
                   {checkedCount}/{checklistItems.length}
+                  {allChecked ? " ✓" : ""}
                 </Text>
               )}
             </View>
+
+            {/* Locked notice — only shown when errand is active but work hasn't started yet */}
+            {checklistItems.length > 0 && checklistLocked && isActive && (
+              <View
+                style={[
+                  styles.checklistLockBanner,
+                  {
+                    backgroundColor: colors.backgroundSecondary,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={14}
+                  color={colors.textTertiary}
+                />
+                <Text
+                  style={[styles.checklistLockText, { color: colors.textTertiary }]}
+                >
+                  {isHandsOn
+                    ? "Start work to unlock the checklist"
+                    : "Checklist unlocks once the errand is in progress"}
+                </Text>
+              </View>
+            )}
+
             <View
               style={[
                 styles.checklistCard,
                 {
                   backgroundColor: colors.backgroundSecondary,
                   borderColor: colors.border,
+                  opacity: checklistLocked ? 0.45 : 1,
                 },
               ]}
             >
@@ -342,16 +423,31 @@ const HelperErrandDetails = () => {
                         borderBottomColor: colors.border,
                       },
                     ]}
-                    onPress={() =>
+                    onPress={() => {
+                      if (checklistLocked) {
+                        // Only prompt if there's something the helper can actually do
+                        if (isActive) {
+                          Toast.show({
+                            type: "info",
+                            text1: isHandsOn
+                              ? "Start work first"
+                              : "Errand not started yet",
+                            text2: isHandsOn
+                              ? "Tap 'Start Work' to begin, then tick off items"
+                              : "The checklist will unlock once the errand is active",
+                          });
+                        }
+                        return;
+                      }
                       dispatch(
                         toggleItem({
                           errandId: id!,
                           index,
                           total: checklistItems.length,
                         }),
-                      )
-                    }
-                    activeOpacity={0.7}
+                      );
+                    }}
+                    activeOpacity={checklistLocked ? 1 : 0.7}
                   >
                     <View
                       style={[
@@ -407,38 +503,47 @@ const HelperErrandDetails = () => {
                       { color: colors.textSecondary },
                     ]}
                   >
-                    Pickup
+                    {isHandsOn ? "Location" : "Pickup"}
                   </Text>
                   <Text style={[styles.locationValue, { color: colors.text }]}>
-                    {errand.pickupLocation}
+                    {errand.firstLocation}
                   </Text>
                 </View>
               </View>
-              <View
-                style={[
-                  styles.locationLine,
-                  { backgroundColor: colors.border },
-                ]}
-              />
-              <View style={styles.locationRow}>
-                <View
-                  style={[styles.locationDot, { backgroundColor: colors.cta }]}
-                />
-                <View>
-                  <Text
+              {!isHandsOn && (
+                <>
+                  <View
                     style={[
-                      styles.locationLabel,
-                      { color: colors.textSecondary },
+                      styles.locationLine,
+                      { backgroundColor: colors.border },
                     ]}
-                  >
-                    Drop-off
-                  </Text>
-                  <Text style={[styles.locationValue, { color: colors.text }]}>
-                    {errand.dropoffLocation}
-                  </Text>
-                </View>
-              </View>
-              {errand.pickupReference && (
+                  />
+                  <View style={styles.locationRow}>
+                    <View
+                      style={[
+                        styles.locationDot,
+                        { backgroundColor: colors.cta },
+                      ]}
+                    />
+                    <View>
+                      <Text
+                        style={[
+                          styles.locationLabel,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Drop-off
+                      </Text>
+                      <Text
+                        style={[styles.locationValue, { color: colors.text }]}
+                      >
+                        {errand.finalLocation}
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              )}
+              {errand.locationReference && (
                 <>
                   <View
                     style={[
@@ -459,7 +564,7 @@ const HelperErrandDetails = () => {
                     <Text
                       style={[styles.metaText, { color: colors.textSecondary }]}
                     >
-                      Ref: {errand.pickupReference}
+                      Ref: {errand.locationReference}
                     </Text>
                   </View>
                 </>
@@ -469,283 +574,126 @@ const HelperErrandDetails = () => {
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-          {/* Response Section — only when posted */}
-          {isPosted && (
-            <View style={styles.section}>
-              {hasOffer ? (
-                <>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    Your Offer
-                  </Text>
-                  <View
-                    style={[
-                      styles.offerConfirmed,
-                      {
-                        backgroundColor: colors.success + "15",
-                        borderColor: colors.success,
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name="checkmark-circle-outline"
-                      size={20}
-                      color={colors.success}
-                    />
-                    <View>
-                      <Text
-                        style={[
-                          styles.offerConfirmedTitle,
-                          { color: colors.success },
-                        ]}
-                      >
-                        Offer Sent
-                      </Text>
-                      <Text
-                        style={[
-                          styles.offerConfirmedSub,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        Your offer: £{myOffer?.amount?.toFixed(2)} — waiting for
-                        requester to respond
-                      </Text>
-                    </View>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    Respond to Task
-                  </Text>
-
-                  {errand.suggestedPrice && (
-                    <View
-                      style={[
-                        styles.suggestedRow,
-                        {
-                          backgroundColor: colors.backgroundSecondary,
-                          borderColor: colors.border,
-                        },
-                      ]}
-                    >
-                      <Ionicons
-                        name="information-circle-outline"
-                        size={16}
-                        color={colors.primary}
-                      />
-                      <Text
-                        style={[
-                          styles.suggestedText,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
-                        Suggested price:{" "}
-                        <Text
-                          style={{ color: colors.primary, fontWeight: "700" }}
-                        >
-                          £{errand.suggestedPrice.toFixed(2)}
-                        </Text>
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Accept */}
-                  <TouchableOpacity
-                    style={[
-                      styles.actionBtn,
-                      {
-                        backgroundColor: colors.success,
-                        opacity: isAccepting ? 0.7 : 1,
-                      },
-                    ]}
-                    onPress={handleAccept}
-                    disabled={isAccepting}
-                  >
-                    {isAccepting ? (
-                      <LoadingSpinner size="small" color="#fff" />
-                    ) : (
-                      <>
-                        <Ionicons
-                          name="checkmark-circle-outline"
-                          size={18}
-                          color="#fff"
-                        />
-                        <Text style={styles.actionBtnText}>
-                          Accept at £{errand.suggestedPrice?.toFixed(2) ?? "—"}
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
-
-                  {/* Negotiate */}
-                  {showNegotiate ? (
-                    <View
-                      style={[
-                        styles.negotiateContainer,
-                        {
-                          backgroundColor: colors.backgroundSecondary,
-                          borderColor: colors.border,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.offerAmountDisplay,
-                          { color: colors.text },
-                        ]}
-                      >
-                        £{currentOffer.toFixed(2)}
-                      </Text>
-                      <View style={styles.sliderRow}>
-                        <TouchableOpacity
-                          style={[
-                            styles.stepButton,
-                            {
-                              backgroundColor: colors.background,
-                              borderColor: colors.border,
-                            },
-                          ]}
-                          onPress={() => adjustOffer("down")}
-                        >
-                          <Ionicons
-                            name="remove"
-                            size={20}
-                            color={colors.text}
-                          />
-                        </TouchableOpacity>
-                        <View style={styles.sliderTrackContainer}>
-                          <View
-                            style={[
-                              styles.sliderTrack,
-                              { backgroundColor: colors.border },
-                            ]}
-                          />
-                          <View
-                            style={[
-                              styles.sliderFill,
-                              {
-                                backgroundColor: colors.primary,
-                                width: `${fillPercent}%`,
-                              },
-                            ]}
-                          />
-                        </View>
-                        <TouchableOpacity
-                          style={[
-                            styles.stepButton,
-                            {
-                              backgroundColor: colors.background,
-                              borderColor: colors.border,
-                            },
-                          ]}
-                          onPress={() => adjustOffer("up")}
-                        >
-                          <Ionicons name="add" size={20} color={colors.text} />
-                        </TouchableOpacity>
-                      </View>
-                      <View style={styles.sliderLabels}>
-                        <Text
-                          style={[
-                            styles.sliderLabel,
-                            { color: colors.textTertiary },
-                          ]}
-                        >
-                          £{basePrice.toFixed(2)}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.sliderLabel,
-                            { color: colors.textTertiary },
-                          ]}
-                        >
-                          £{maxPrice.toFixed(2)}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[
-                          styles.actionBtn,
-                          {
-                            backgroundColor: colors.primary,
-                            opacity: isSubmitting ? 0.7 : 1,
-                          },
-                        ]}
-                        onPress={handleSubmitOffer}
-                        disabled={isSubmitting}
-                      >
-                        {isSubmitting ? (
-                          <LoadingSpinner size="small" color="#fff" />
-                        ) : (
-                          <Text style={styles.actionBtnText}>
-                            Make Offer — £{currentOffer.toFixed(2)}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <TouchableOpacity
-                      style={[
-                        styles.actionBtn,
-                        { backgroundColor: colors.primary },
-                      ]}
-                      onPress={() => {
-                        setOfferAmount(basePrice.toFixed(2));
-                        setShowNegotiate(true);
-                      }}
-                      disabled={isAccepting}
-                    >
-                      <Ionicons
-                        name="pricetag-outline"
-                        size={18}
-                        color="#fff"
-                      />
-                      <Text style={styles.actionBtnText}>Negotiate Price</Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {/* Decline */}
-                  <TouchableOpacity
-                    style={[
-                      styles.declineBtn,
-                      {
-                        borderColor: colors.error,
-                        opacity: 1,
-                      },
-                    ]}
-                    onPress={handleDecline}
-                    disabled={isAccepting}
-                  >
-                    <>
-                      <Ionicons
-                        name="close-circle-outline"
-                        size={18}
-                        color={colors.error}
-                      />
-                      <Text
-                        style={[styles.declineBtnText, { color: colors.error }]}
-                      >
-                        Decline
-                      </Text>
-                    </>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-          )}
+          
 
           {/* Actions — when in progress */}
           {isActive && (
             <View style={styles.section}>
-              <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.success }]}
-                onPress={handleMarkComplete}
-              >
-                <Ionicons
-                  name="checkmark-circle-outline"
-                  size={18}
-                  color="#fff"
-                />
-                <Text style={styles.actionBtnText}>Mark as Complete</Text>
-              </TouchableOpacity>
+              {isHandsOn && !workStarted ? (
+                // HANDS_ON_HELP — not started yet
+                <TouchableOpacity
+                  style={[
+                    styles.actionBtn,
+                    {
+                      backgroundColor: colors.primary,
+                      opacity: isStarting ? 0.7 : 1,
+                    },
+                  ]}
+                  onPress={handleStartWork}
+                  disabled={isStarting}
+                >
+                  {isStarting ? (
+                    <LoadingSpinner size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="play-circle-outline"
+                        size={18}
+                        color="#fff"
+                      />
+                      <Text style={styles.actionBtnText}>Start Work</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              ) : isHandsOn && workStarted ? (
+                // HANDS_ON_HELP — in progress, timer running
+                <>
+                  <View
+                    style={[
+                      styles.timerCard,
+                      {
+                        backgroundColor: colors.backgroundSecondary,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="timer-outline"
+                      size={20}
+                      color={colors.primary}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.timerLabel,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Time elapsed
+                      </Text>
+                      <Text style={[styles.timerValue, { color: colors.text }]}>
+                        {formatTimeRemaining(elapsedSeconds)}
+                      </Text>
+                    </View>
+                    {errand?.estimatedDuration && (
+                      <Text
+                        style={[
+                          styles.timerEst,
+                          { color: colors.textTertiary },
+                        ]}
+                      >
+                        Est. {errand.estimatedDuration}hr
+                      </Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.actionBtn,
+                      {
+                        backgroundColor: allChecked
+                          ? colors.success
+                          : colors.border,
+                      },
+                    ]}
+                    onPress={handleMarkComplete}
+                  >
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={18}
+                      color="#fff"
+                    />
+                    <Text style={styles.actionBtnText}>
+                      {allChecked
+                        ? "Mark as Complete"
+                        : `${checkedCount}/${checklistItems.length} items checked`}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                // PICKUP_DELIVERY / SHOPPING
+                <TouchableOpacity
+                  style={[
+                    styles.actionBtn,
+                    {
+                      backgroundColor: allChecked
+                        ? colors.success
+                        : colors.border,
+                    },
+                  ]}
+                  onPress={handleMarkComplete}
+                >
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={18}
+                    color="#fff"
+                  />
+                  <Text style={styles.actionBtnText}>
+                    {allChecked
+                      ? "Mark as Complete"
+                      : `${checkedCount}/${checklistItems.length} items checked`}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
@@ -783,6 +731,94 @@ const HelperErrandDetails = () => {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={showOvertimeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOvertimeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Ionicons name="timer-outline" size={32} color={colors.primary} />
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Estimated time is up!
+            </Text>
+            <Text style={[styles.modalSub, { color: colors.textSecondary }]}>
+              Have you finished or do you need more time?
+            </Text>
+
+            <View style={styles.extensionRow}>
+              {[0.5, 1, 2, 3].map((h) => (
+                <TouchableOpacity
+                  key={h}
+                  style={[
+                    styles.extensionOption,
+                    {
+                      backgroundColor:
+                        selectedExtension === h
+                          ? colors.primary
+                          : colors.backgroundSecondary,
+                      borderColor:
+                        selectedExtension === h
+                          ? colors.primary
+                          : colors.border,
+                    },
+                  ]}
+                  onPress={() => setSelectedExtension(h)}
+                >
+                  <Text
+                    style={[
+                      styles.extensionText,
+                      {
+                        color:
+                          selectedExtension === h
+                            ? "#fff"
+                            : colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    +{h}hr
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.modalBtn,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: isExtending ? 0.7 : 1,
+                },
+              ]}
+              onPress={handleExtend}
+              disabled={isExtending}
+            >
+              <Text style={styles.modalBtnText}>
+                {isExtending
+                  ? "Extending..."
+                  : `Add ${selectedExtension} hour${selectedExtension !== 1 ? "s" : ""}`}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modalBtn, { backgroundColor: colors.success }]}
+              onPress={() => {
+                setShowOvertimeModal(false);
+                handleMarkComplete();
+              }}
+            >
+              <Text style={styles.modalBtnText}>{"I'm Done"}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -867,6 +903,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   checklistCount: { fontSize: 13, fontWeight: "500" },
+  checklistLockBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  checklistLockText: { fontSize: 12, flex: 1 },
   checklistCard: {
     borderWidth: 1,
     borderRadius: 12,
@@ -895,70 +941,6 @@ const styles = StyleSheet.create({
   locationLine: { width: 2, height: 20, marginLeft: 4, marginVertical: 2 },
   locationLabel: { fontSize: 12, marginBottom: 2 },
   locationValue: { fontSize: 14, fontWeight: "500" },
-  suggestedRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  suggestedText: { fontSize: 13, flex: 1 },
-  offerConfirmed: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    padding: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  offerConfirmedTitle: { fontSize: 14, fontWeight: "700" },
-  offerConfirmedSub: { fontSize: 13, marginTop: 2 },
-  negotiateContainer: {
-    gap: 12,
-    padding: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  offerAmountDisplay: {
-    fontSize: 28,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  sliderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  stepButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sliderTrackContainer: {
-    flex: 1,
-    height: 6,
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  sliderTrack: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 3,
-  },
-  sliderFill: {
-    height: "100%",
-    borderRadius: 3,
-  },
-  sliderLabels: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  sliderLabel: {
-    fontSize: 12,
-  },
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -968,16 +950,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   actionBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
-  declineBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 10,
-    borderWidth: 1.5,
-  },
-  declineBtnText: { fontSize: 15, fontWeight: "600" },
   noticeCard: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -988,4 +960,52 @@ const styles = StyleSheet.create({
   },
   noticeTitle: { fontSize: 14, fontWeight: "700" },
   noticeBody: { fontSize: 13, lineHeight: 19 },
+  timerCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  timerLabel: { fontSize: 12 },
+  timerValue: { fontSize: 22, fontWeight: "700" },
+  timerEst: { fontSize: 12 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalCard: {
+    width: "100%",
+    padding: 24,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    gap: 14,
+  },
+  modalTitle: { fontSize: 18, fontWeight: "700", textAlign: "center" },
+  modalSub: { fontSize: 14, textAlign: "center", lineHeight: 20 },
+  extensionRow: {
+    flexDirection: "row",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "center",
+  },
+  extensionOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  extensionText: { fontSize: 14, fontWeight: "600" },
+  modalBtn: {
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  modalBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
 });

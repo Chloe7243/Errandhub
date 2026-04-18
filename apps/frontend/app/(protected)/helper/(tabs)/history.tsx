@@ -270,7 +270,7 @@ const HelperErrandHistory = () => {
                   ).toLocaleDateString()}
                 </Text>
                 <Text style={[styles.errandPrice, { color: colors.primary }]}>
-                  £{(item.agreedPrice ?? item.suggestedPrice ?? 0).toFixed(2)}
+                  £{item.finalCost.toFixed(2)}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -346,8 +346,8 @@ const HelperErrandHistory = () => {
                       label: "Type",
                       value: formatErrandType(selectedErrand.type),
                     },
-                    { label: "Pickup", value: selectedErrand.pickupLocation },
-                    { label: "Dropoff", value: selectedErrand.dropoffLocation },
+                    { label: "Pickup", value: selectedErrand.firstLocation },
+                    { label: "Dropoff", value: selectedErrand.finalLocation },
                     {
                       label: "Requester",
                       value: `${selectedErrand.requester?.firstName} ${selectedErrand.requester?.lastName}`,
@@ -366,7 +366,7 @@ const HelperErrandHistory = () => {
                     },
                     {
                       label: "Earned",
-                      value: `£${(selectedErrand.agreedPrice ?? selectedErrand.suggestedPrice ?? 0).toFixed(2)}`,
+                      value: `£${selectedErrand.finalCost.toFixed(2)}`,
                     },
                   ].map((row, index, arr) => (
                     <View key={row.label}>

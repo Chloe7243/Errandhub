@@ -8,11 +8,20 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useThemePreference } from "@/hooks/use-theme-preference";
 import {
-  useGetRequestedErrandsQuery,
   useGetUserDetailsQuery,
+  useUpdateAvatarMutation,
+  useGetRequestedErrandsQuery,
 } from "@/store/api/user";
+import {
+  useGetPaymentMethodsQuery,
+  useDeletePaymentMethodMutation,
+  useGetSetupIntentMutation,
+} from "@/store/api/payment";
+import { useStripe } from "@stripe/stripe-react-native";
+import { api } from "@/store/api";
+import * as ImagePicker from "expo-image-picker";
 import { useAppDispatch } from "@/store/hooks";
-import { logoutUser } from "@/store/slices";
+import { logoutUser, updateUserState } from "@/store/slices";
 import { ThemePreference } from "@/store/slices/theme";
 import { activeStatuses } from "@errandhub/shared";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,6 +35,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
+import { displayErrorMessage } from "@/utils/errors";
 
 type Section =
   | null
@@ -60,6 +71,104 @@ const Profile = () => {
   const { data: activeErrandsData } = useGetRequestedErrandsQuery({
     status: activeStatuses,
   });
+
+  const [updateAvatar, { isLoading: isUploadingAvatar }] =
+    useUpdateAvatarMutation();
+
+  const handleAvatarPress = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Toast.show({ type: "error", text1: "Camera roll permission required" });
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images",
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+
+    const localUri = result.assets[0].uri;
+    try {
+      const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME ?? "";
+      const uploadPreset =
+        process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? "";
+      const filename = localUri.split("/").pop() ?? "avatar.jpg";
+      const type = filename.endsWith(".png") ? "image/png" : "image/jpeg";
+      const formData = new FormData();
+      formData.append("file", { uri: localUri, name: filename, type } as any);
+      formData.append("upload_preset", uploadPreset);
+
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        { method: "POST", body: formData },
+      );
+      if (!res.ok) throw new Error("Upload failed");
+      const { secure_url } = await res.json();
+
+      await updateAvatar(secure_url).unwrap();
+      dispatch(updateUserState({ avatarUrl: secure_url }));
+      Toast.show({ type: "success", text1: "Avatar updated" });
+    } catch {
+      Toast.show({ type: "error", text1: "Failed to update avatar" });
+    }
+  };
+
+  const { data: methodsData } = useGetPaymentMethodsQuery();
+  const [deletePaymentMethod] = useDeletePaymentMethodMutation();
+  const [getSetupIntent, { isLoading: isAddingCard }] =
+    useGetSetupIntentMutation();
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+
+  const savedCards = methodsData?.paymentMethods ?? [];
+
+  const handleAddCard = async () => {
+    try {
+      const { clientSecret } = await getSetupIntent().unwrap();
+
+      const { error: initError } = await initPaymentSheet({
+        setupIntentClientSecret: clientSecret,
+        merchantDisplayName: "ErrandHub",
+        allowsDelayedPaymentMethods: false,
+      });
+      if (initError) {
+        Toast.show({ type: "error", text1: initError.message });
+        return;
+      }
+
+      const { error } = await presentPaymentSheet();
+      if (error) {
+        if (error.code !== "Canceled") {
+          Toast.show({ type: "error", text1: error.message });
+        }
+        return;
+      }
+
+      dispatch(api.util.invalidateTags(["payment methods"]));
+      Toast.show({ type: "success", text1: "Card added successfully" });
+    } catch (err) {
+      displayErrorMessage(err);
+    }
+  };
+
+  const handleDeleteCard = (cardId: string, last4: string) => {
+    Alert.alert("Remove Card", `Remove card ending in ${last4}?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deletePaymentMethod(cardId).unwrap();
+            Toast.show({ type: "success", text1: "Card removed" });
+          } catch (err) {
+            displayErrorMessage(err);
+          }
+        },
+      },
+    ]);
+  };
 
   const user = data?.user;
 
@@ -101,12 +210,30 @@ const Profile = () => {
         <ScrollView contentContainerStyle={styles.scroll}>
           {/* Avatar + Name */}
           <View style={styles.hero}>
-            <Avatar
-              firstName={user.firstName}
-              lastName={user.lastName}
-              uri={user.avatarUrl ?? undefined}
-              size={80}
-            />
+            <TouchableOpacity
+              onPress={handleAvatarPress}
+              disabled={isUploadingAvatar}
+              style={styles.avatarWrapper}
+            >
+              <Avatar
+                firstName={user.firstName}
+                lastName={user.lastName}
+                uri={user.avatarUrl ?? undefined}
+                size={80}
+              />
+              <View
+                style={[
+                  styles.avatarEditBadge,
+                  { backgroundColor: colors.primary },
+                ]}
+              >
+                {isUploadingAvatar ? (
+                  <LoadingSpinner customSize={0.8} color="#fff" />
+                ) : (
+                  <Ionicons name="camera-outline" size={13} color="#fff" />
+                )}
+              </View>
+            </TouchableOpacity>
             <Text style={[styles.name, { color: colors.text }]}>
               {user.firstName} {user.lastName}
             </Text>
@@ -190,27 +317,63 @@ const Profile = () => {
               expanded={expanded === "paymentMethods"}
               onPress={() => toggle("paymentMethods")}
             >
-              <View
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: colors.backgroundSecondary,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Ionicons
-                  name="card-outline"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-                <Text style={[styles.cardText, { color: colors.text }]}>
-                  •••• •••• •••• 4242
-                </Text>
-                <Text style={[styles.cardBadge, { color: colors.primary }]}>
-                  Default
-                </Text>
-              </View>
+              {savedCards.length === 0 && (
+                <View style={styles.emptyCards}>
+                  <Ionicons
+                    name="card-outline"
+                    size={26}
+                    color={colors.textTertiary}
+                  />
+                  <Text
+                    style={[
+                      styles.emptyCardsText,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    No saved cards yet.
+                  </Text>
+                </View>
+              )}
+
+              {savedCards.map((card) => (
+                <View
+                  key={card.id}
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: colors.backgroundSecondary,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="card-outline"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={[styles.cardText, { color: colors.text }]}>
+                    {card.card.brand.charAt(0).toUpperCase() +
+                      card.card.brand.slice(1)}{" "}
+                    •••• {card.card.last4}
+                  </Text>
+                  <Text
+                    style={[styles.cardExpiry, { color: colors.textSecondary }]}
+                  >
+                    {card.card.exp_month}/{card.card.exp_year}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => handleDeleteCard(card.id, card.card.last4)}
+                    hitSlop={8}
+                  >
+                    <Ionicons
+                      name="trash-outline"
+                      size={16}
+                      color={colors.error}
+                    />
+                  </TouchableOpacity>
+                </View>
+              ))}
+
               <TouchableOpacity
                 style={[
                   styles.saveButton,
@@ -218,12 +381,15 @@ const Profile = () => {
                     backgroundColor: colors.surface,
                     borderColor: colors.border,
                     borderWidth: 1,
+                    opacity: isAddingCard ? 0.6 : 1,
                   },
                 ]}
+                onPress={handleAddCard}
+                disabled={isAddingCard}
               >
                 <Ionicons name="add" size={18} color={colors.text} />
                 <Text style={[styles.saveText, { color: colors.text }]}>
-                  Add Payment Method
+                  {isAddingCard ? "Opening..." : "Add Payment Method"}
                 </Text>
               </TouchableOpacity>
             </ExpandableSection>
@@ -317,6 +483,19 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { padding: 24, gap: 20 },
   hero: { alignItems: "center", gap: 6, paddingVertical: 16 },
+  avatarWrapper: { position: "relative" },
+  avatarEditBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
   name: { fontSize: 22, fontWeight: "700" },
   university: { fontSize: 15, fontWeight: "500" },
   member: { fontSize: 13 },
@@ -348,6 +527,9 @@ const styles = StyleSheet.create({
   },
   cardText: { flex: 1, fontSize: 14 },
   cardBadge: { fontSize: 12, fontWeight: "600" },
+  cardExpiry: { fontSize: 12 },
+  emptyCards: { alignItems: "center", gap: 8, paddingVertical: 12 },
+  emptyCardsText: { fontSize: 13, textAlign: "center", lineHeight: 18 },
   notifRow: {
     flexDirection: "row",
     justifyContent: "space-between",

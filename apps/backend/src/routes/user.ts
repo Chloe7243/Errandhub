@@ -3,6 +3,7 @@ import {
   getRequestedErrands,
   getHelpedErrands,
   updateSettings,
+  updateAvatar,
   getSettings,
   getUser,
   savePushToken,
@@ -12,6 +13,7 @@ import { requireRole } from "../middleware/role";
 const router = Router();
 
 router.get("/me", getUser);
+router.patch("/avatar", updateAvatar);
 router.post("/push-token", savePushToken);
 router.get("/settings", getSettings);
 router.patch("/update-settings", updateSettings);
