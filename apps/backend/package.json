@@ -9,7 +9,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon --exec ts-node src/index.ts",
-    "build": "npm run build --workspace=shared && tsc",
+    "build": "npm run build --workspace=@errandhub/shared && tsc",
     "start": "node dist/index.js",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
