@@ -1,4 +1,3 @@
-// app/reset-password.tsx
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -41,14 +40,15 @@ const ResetPassword = () => {
 
   const onSubmit = async (data: ResetPasswordForm) => {
     try {
-      const response = await resetPassword({
+      await resetPassword({
         token,
         password: data.password,
       }).unwrap();
       Toast.show({ type: "success", text1: "Password reset successfully" });
-      router.replace("/(auth)/login");
     } catch (err) {
       Toast.show({ type: "error", text1: "Invalid or expired reset link" });
+    } finally {
+      router.replace("/(auth)/login");
     }
   };
 

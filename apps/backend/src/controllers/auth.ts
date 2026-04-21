@@ -1,4 +1,4 @@
-import { NextFunction, Request, Response } from "express";
+import { NextFunction, Request, Response, RequestHandler } from "express";
 
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
@@ -11,7 +11,8 @@ import {
   roleSelectionSchema,
   resetPasswordSchema,
 } from "@errandhub/shared";
-import resend from "../lib/resend";
+import { sendEmail } from "../lib/nodemailer";
+import { welcomeEmail, resetPasswordEmail } from "../emails";
 
 export const signUp = async (
   req: Request,
@@ -56,15 +57,10 @@ export const signUp = async (
       expiresIn: "7d",
     });
 
-    const { data, error } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL as string,
-      to: process.env.RESEND_TEMP_TO_EMAIL as string,
+    sendEmail({
+      to: user.email,
       subject: "Welcome to ErrandHub 🎉",
-      html: `
-        <h2>Welcome to ErrandHub, ${firstName}!</h2>
-        <p>We're excited to have you on board.</p>
-        <p>If you didn't create an account, ignore this email.</p>
-      `,
+      html: welcomeEmail(firstName),
     });
 
     // Create default settings for the new user
@@ -94,6 +90,8 @@ export const login = async (
       throw new AppError(parsed.error.errors[0].message, 400);
     }
 
+    console.log({ parsed });
+
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       throw new AppError("Invalid credentials", 401);
@@ -111,6 +109,8 @@ export const login = async (
       email: user.email,
       avatarUrl: user.avatarUrl,
     };
+
+    console.log({ userData });
 
     const token = jwt.sign(userData, process.env.JWT_SECRET as string, {
       expiresIn: "7d",
@@ -195,18 +195,10 @@ export const forgetPassword = async (
       data: { resetToken, resetTokenExpiry },
     });
 
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL as string,
-      to: process.env.RESEND_TEMP_TO_EMAIL as string,
+    sendEmail({
+      to: user.email,
       subject: "Reset your ErrandHub password",
-      html: `
-        <h2>Reset your password</h2>
-        <p>Click the link below to reset your password. This link expires in 10 minutes.</p>
-        <a href="errandhub://reset-password?token=${resetToken}">
-          Reset Password
-        </a>
-        <p>If you didn't request this, ignore this email.</p>
-      `,
+      html: resetPasswordEmail(resetToken),
     });
 
     res.status(200).json({ message: "Password reset email sent" });
