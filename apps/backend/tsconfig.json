@@ -9,7 +9,7 @@
     "types": ["node"],
     "sourceMap": true,
     "declaration": true,
-    "strict": true,
+    "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "paths": {
