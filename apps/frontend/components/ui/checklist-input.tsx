@@ -18,6 +18,14 @@ type Props = {
   error?: string;
 };
 
+/**
+ * Parse the description field into a checklist item array.
+ *
+ * The description is a single string server-side; newer errands encode a
+ * multi-item checklist as JSON while older/freeform entries are plain text.
+ * This helper handles both so editing a legacy errand still renders its
+ * text as a single-item list instead of showing an empty checklist.
+ */
 const parse = (value: string): string[] => {
   try {
     const parsed = JSON.parse(value);
@@ -26,6 +34,17 @@ const parse = (value: string): string[] => {
   return value ? [value] : [];
 };
 
+/**
+ * Dynamic list input used on the create-errand form for shopping/pickup
+ * checklists. Renders existing items with inline-edit and delete, plus an
+ * "add row" input. Emits a JSON-encoded string array (or the empty string
+ * when cleared) to the parent via onChange so it slots straight into the
+ * form's `description` field. Tapping an item opens an inline editor;
+ * committing an empty edit removes the item. Props:
+ *   - label / placeholder / error: standard form chrome.
+ *   - value: incoming JSON string (or plain text for legacy errands).
+ *   - onChange: called with the serialised value on every mutation.
+ */
 const ChecklistInput = ({
   label,
   value,
@@ -38,13 +57,17 @@ const ChecklistInput = ({
 
   const [items, setItems] = useState<string[]>(() => parse(value));
   const [newItem, setNewItem] = useState("");
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingValue, setEditingValue] = useState("");
   const inputRef = useRef<TextInput>(null);
+  const editInputRef = useRef<TextInput>(null);
 
-  // Sync internal state when value is changed externally (e.g. repost prefill via reset())
+  // Sync internal items when the parent resets/prefills the value prop (e.g. repost flow).
+  // The identity check prevents a loop: onChange serialises items → parent updates value prop
+  // → this effect fires → setItems would re-render → onChange fires again …
   useEffect(() => {
     const parsed = parse(value);
     setItems((current) => {
-      // Skip update if content is identical — avoids looping after user edits
       if (JSON.stringify(parsed) === JSON.stringify(current)) return current;
       return parsed;
     });
@@ -65,6 +88,28 @@ const ChecklistInput = ({
 
   const removeItem = (index: number) => {
     commit(items.filter((_, i) => i !== index));
+  };
+
+  const startEditing = (index: number) => {
+    setEditingIndex(index);
+    setEditingValue(items[index]);
+    // Defer focus by one frame — the edit TextInput is not yet mounted when state is set.
+    setTimeout(() => editInputRef.current?.focus(), 50);
+  };
+
+  // Committing an empty edit removes the item — this way the user can delete by
+  // clearing the inline field rather than needing to hit the separate remove button.
+  const commitEdit = () => {
+    if (editingIndex === null) return;
+    const trimmed = editingValue.trim();
+    if (trimmed) {
+      const updated = items.map((item, i) => (i === editingIndex ? trimmed : item));
+      commit(updated);
+    } else {
+      commit(items.filter((_, i) => i !== editingIndex));
+    }
+    setEditingIndex(null);
+    setEditingValue("");
   };
 
   return (
@@ -97,12 +142,24 @@ const ChecklistInput = ({
               <View
                 style={[styles.bullet, { backgroundColor: colors.primary }]}
               />
-              <Text
-                style={[styles.itemText, { color: colors.text }]}
-                numberOfLines={2}
-              >
-                {item}
-              </Text>
+              {editingIndex === index ? (
+                <TextInput
+                  ref={editInputRef}
+                  value={editingValue}
+                  onChangeText={setEditingValue}
+                  onBlur={commitEdit}
+                  onSubmitEditing={commitEdit}
+                  returnKeyType="done"
+                  blurOnSubmit
+                  style={[styles.itemText, styles.itemEditInput, { color: colors.text }]}
+                />
+              ) : (
+                <TouchableOpacity style={styles.itemTextWrapper} onPress={() => startEditing(index)}>
+                  <Text style={[styles.itemText, { color: colors.text }]} numberOfLines={2}>
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 onPress={() => removeItem(index)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -191,6 +248,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   itemText: { flex: 1, fontSize: 14, lineHeight: 20 },
+  itemTextWrapper: { flex: 1 },
+  itemEditInput: { padding: 0 },
 
   addRow: {
     flexDirection: "row",

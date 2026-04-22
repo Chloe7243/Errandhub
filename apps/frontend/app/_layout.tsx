@@ -53,6 +53,8 @@ function RootLayoutNav() {
           getValue(THEME_KEY),
         ]);
         if (token) {
+          // Decode the JWT locally to hydrate the Redux store without a network round-trip.
+          // Token validity is still enforced by the API on protected requests.
           const user = jwtDecode<User>(token);
           dispatch(loginUser({ user, token }));
         }
@@ -60,18 +62,23 @@ function RootLayoutNav() {
           dispatch(setThemePreference(savedTheme as ThemePreference));
         }
       } finally {
+        // Always reach this block so the splash screen doesn't hang on error.
         setIsReady(true);
-        await SplashScreen.hideAsync(); // hide when ready
+        await SplashScreen.hideAsync();
       }
     }
     prepare();
   }, []);
 
+  // Guard on isReady prevents a redirect before the stored token has been read.
+  // Without this, an authenticated user would be flashed to the sign-in screen
+  // for one render cycle while the async prepare() is still running.
   useEffect(() => {
     if (!isReady) return;
     if (!isAuthenticated) {
       router.replace("/");
     } else if (isAuthenticated && !user?.role) {
+      // Authenticated but no role chosen yet — resume the onboarding step.
       router.replace("/role-selection");
     } else if (isAuthenticated && user?.role) {
       router.replace(`/${user.role}/home`);

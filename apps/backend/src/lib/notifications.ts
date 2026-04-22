@@ -1,5 +1,9 @@
 import { prisma } from "./prisma";
 
+// Small wrapper around Expo's push service. We don't keep our own push
+// infrastructure — tokens are issued on-device by Expo and submitted to this
+// public endpoint which relays to APNs/FCM.
+
 type PushMessage = {
   title: string;
   body: string;
@@ -25,6 +29,14 @@ const sendPush = async (token: string, message: PushMessage) => {
   });
 };
 
+/**
+ * Send a push notification to a user by id.
+ *
+ * Looks up the stored Expo push token and fires sendPush. Silently no-ops
+ * if the user has no token (notifications not yet opted in). Any error is
+ * logged but swallowed — a push failing must never abort the calling
+ * business flow (errand creation, status change, chat, etc.).
+ */
 export const notifyUser = async (
   userId: string,
   message: PushMessage,

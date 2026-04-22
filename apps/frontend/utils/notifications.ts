@@ -14,14 +14,27 @@ Notifications.setNotificationHandler({
   }),
 });
 
+/**
+ * Request notification permissions and return the device's Expo push token.
+ *
+ * The returned token is stored server-side against the user so future
+ * notifyUser calls can reach this device. Returns null (never throws) on
+ * any failure path — unsupported simulator, permission denied, missing
+ * projectId, network error — so callers can degrade gracefully. Also sets
+ * up the default Android notification channel because iOS and Android
+ * differ on foreground behaviour configuration.
+ */
 export const registerForPushNotifications = async (): Promise<
   string | null
 > => {
+  // Emulators/simulators can't receive real push deliveries.
   if (!Device.isDevice) {
     console.warn("Push notifications require a physical device");
     return null;
   }
 
+  // Android requires an explicit channel to control heads-up/vibration
+  // behaviour; iOS uses categories instead.
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("default", {
       name: "default",
@@ -30,6 +43,8 @@ export const registerForPushNotifications = async (): Promise<
     });
   }
 
+  // Only prompt if permission hasn't already been resolved — re-prompting
+  // after a previous "deny" is disallowed on iOS anyway.
   const { status: existing } = await Notifications.getPermissionsAsync();
   let finalStatus = existing;
 

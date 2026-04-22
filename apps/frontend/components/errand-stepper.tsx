@@ -4,6 +4,9 @@ import { ErrandStatus } from "@errandhub/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, Text, View } from "react-native";
 
+// Ordered happy-path only — CANCELLED / EXPIRED / DISPUTED are terminal
+// off-ramps and never appear as a step. Screens that reach those states
+// swap the stepper out for a dedicated status banner.
 const STEPS: ErrandStatus[] = [
   "POSTED",
   "ACCEPTED",
@@ -27,6 +30,13 @@ type Props = {
   currentStep: ErrandStatus;
 };
 
+/**
+ * Horizontal step indicator showing the happy-path lifecycle of an errand
+ * (Posted → Accepted → In Progress → Reviewing → Completed). Off-ramp
+ * states (CANCELLED / EXPIRED / DISPUTED) are never rendered as a step;
+ * screens that reach those states replace the stepper with a dedicated
+ * status banner.
+ */
 const ErrandStepper = ({ currentStep }: Props) => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];

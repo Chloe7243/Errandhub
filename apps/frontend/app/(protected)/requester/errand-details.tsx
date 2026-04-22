@@ -52,14 +52,14 @@ const ErrandDetails = () => {
     errand?.status === "CANCELLED" || errand?.status === "DISPUTED";
   const displayAmount = errand?.agreedPrice ?? errand?.suggestedPrice;
 
-  // Seconds until the 2-minute repost cooldown expires
+  // Seconds until the 1-minute repost cooldown expires
   const getRepostSecondsLeft = useCallback(
     () =>
       errand?.updatedAt
         ? Math.max(
             0,
             Math.ceil(
-              (new Date(errand.updatedAt).getTime() + 3 * 1000 - Date.now()) /
+              (new Date(errand.updatedAt).getTime() + 60 * 1000 - Date.now()) /
                 1000,
             ),
           )
@@ -144,7 +144,8 @@ const ErrandDetails = () => {
                 </Text>
                 {displayAmount != null && (
                   <Text style={[styles.amount, { color: colors.primary }]}>
-                    £{displayAmount.toFixed(2)}{errand.type === "HANDS_ON_HELP" ? "/hr" : ""}
+                    £{displayAmount.toFixed(2)}
+                    {errand.type === "HANDS_ON_HELP" ? "/hr" : ""}
                   </Text>
                 )}
               </View>
@@ -208,7 +209,10 @@ const ErrandDetails = () => {
                     color={colors.textTertiary}
                   />
                   <Text
-                    style={[styles.locationText, { color: colors.textSecondary }]}
+                    style={[
+                      styles.locationText,
+                      { color: colors.textSecondary },
+                    ]}
                   >
                     {errand.finalLocation}
                   </Text>
@@ -273,7 +277,11 @@ const ErrandDetails = () => {
                         });
                       }}
                     >
-                      <Ionicons name="chatbubble-outline" size={16} color="#fff" />
+                      <Ionicons
+                        name="chatbubble-outline"
+                        size={16}
+                        color="#fff"
+                      />
                       <Text style={styles.contactText}>Message</Text>
                     </TouchableOpacity>
                   )}
@@ -335,7 +343,9 @@ const ErrandDetails = () => {
                     Amount Paid
                   </Text>
                   <Text style={[styles.amount, { color: colors.primary }]}>
-                    £{(errand.type === "HANDS_ON_HELP" && errand.finalCost != null
+                    £
+                    {(errand.type === "HANDS_ON_HELP" &&
+                    errand.finalCost != null
                       ? errand.finalCost
                       : displayAmount
                     )?.toFixed(2) ?? "—"}
@@ -479,7 +489,6 @@ const ErrandDetails = () => {
           <Text style={styles.fabText}>Emergency</Text>
         </TouchableOpacity>
       )}
-
     </SafeAreaView>
   );
 };

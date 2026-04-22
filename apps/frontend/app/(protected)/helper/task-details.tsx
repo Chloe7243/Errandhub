@@ -11,7 +11,7 @@ import {
   useExtendWorkMutation,
 } from "@/store/api/errand";
 import { formatErrandType, formatErrandStatus } from "@/utils/errand";
-import { STATUS_COLORS } from "@/utils/constants";
+import { ERRAND_LOCATION_COLORS, STATUS_COLORS } from "@/utils/constants";
 import { displayErrorMessage } from "@/utils/errors";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -36,12 +36,16 @@ import {
   parseChecklist,
 } from "@/store/slices/checklist";
 import { formatTimeRemaining } from "@/utils/time";
+import * as Location from "expo-location";
 
 const HelperErrandDetails = () => {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
+  const [location, setLocation] = useState<Location.LocationObject | null>(
+    null,
+  );
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [startWork, { isLoading: isStarting }] = useStartWorkMutation();
@@ -75,6 +79,23 @@ const HelperErrandDetails = () => {
     checklistItems.length === 0 || checkedCount === checklistItems.length;
   // Checklist is interactive only once work has begun
   const checklistLocked = isHandsOn ? !workStarted : !isActive;
+
+  const {
+    firstLocation: firstLocationColor,
+    currentLocation: currentLocationColor,
+    finalLocation: finalLocationColor,
+  } = ERRAND_LOCATION_COLORS;
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+      const loc = await Location.getCurrentPositionAsync({});
+      setLocation(loc);
+    })();
+  }, []);
+
+  console.log("Location:", { location });
 
   const handleMarkComplete = () => {
     if (isHandsOn && !workStarted) {
@@ -158,14 +179,16 @@ const HelperErrandDetails = () => {
     }
   };
 
-  const handleNavigate = () => {
-    if (!errand?.firstLat || !errand?.firstLng) return;
+  const handleNavigate = (lat: number, lng: number) => {
+    if (!lat || !lng) return;
     const url =
       Platform.OS === "ios"
-        ? `maps:?daddr=${errand.firstLat},${errand.firstLng}`
-        : `geo:${errand.firstLat},${errand.firstLng}?q=${errand.firstLat},${errand.firstLng}`;
+        ? `maps:?daddr=${lat},${lng}`
+        : `geo:${lat},${lng}?q=${lat},${lng}`;
     Linking.openURL(url);
   };
+
+  console.log({ errand });
 
   if (isLoading) return <LoadingSpinner fullScreen />;
   if (isError || !errand)
@@ -196,12 +219,17 @@ const HelperErrandDetails = () => {
           <View
             style={[styles.mapSection, { borderBottomColor: colors.border }]}
           >
-            {errand.firstLat && errand.firstLng ? (
+            {errand.firstLocation ? (
               <MapPreview
                 firstLat={errand.firstLat}
                 firstLng={errand.firstLng}
+                currentLat={location?.coords.latitude}
+                currentLng={location?.coords.longitude}
+                firstColor={firstLocationColor}
+                currentColor={currentLocationColor}
                 finalLat={errand.finalLat ?? undefined}
                 finalLng={errand.finalLng ?? undefined}
+                lastColor={finalLocationColor}
               />
             ) : (
               <View
@@ -220,20 +248,44 @@ const HelperErrandDetails = () => {
                 </Text>
               </View>
             )}
-            <TouchableOpacity
-              style={[
-                styles.navigateBtn,
-                {
-                  backgroundColor: colors.primary,
-                  opacity: errand.firstLat ? 1 : 0.4,
-                },
-              ]}
-              onPress={handleNavigate}
-              disabled={!errand.firstLat}
-            >
-              <Ionicons name="navigate-outline" size={14} color="#fff" />
-              <Text style={styles.navigateBtnText}>Navigate to Pickup</Text>
-            </TouchableOpacity>
+            <View style={styles.navigateBtns}>
+              <TouchableOpacity
+                style={[
+                  styles.navigateBtn,
+                  {
+                    backgroundColor: firstLocationColor,
+                    opacity: errand.firstLat ? 1 : 0.4,
+                  },
+                ]}
+                onPress={() =>
+                  handleNavigate(errand.firstLat!, errand.firstLng!)
+                }
+                disabled={!errand.firstLat}
+              >
+                <Ionicons name="navigate-outline" size={14} color="#fff" />
+                <Text style={styles.navigateBtnText}>Navigate to Pickup</Text>
+              </TouchableOpacity>
+              {errand.finalLocation && (
+                <TouchableOpacity
+                  style={[
+                    styles.navigateBtn,
+                    {
+                      backgroundColor: finalLocationColor,
+                      opacity: errand.finalLat ? 1 : 0.4,
+                    },
+                  ]}
+                  onPress={() =>
+                    handleNavigate(errand.finalLat!, errand.finalLng!)
+                  }
+                  disabled={!errand.finalLat}
+                >
+                  <Ionicons name="navigate-outline" size={14} color="#fff" />
+                  <Text style={styles.navigateBtnText}>
+                    Navigate to Drop off
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
 
           {/* Task Header */}
@@ -392,7 +444,10 @@ const HelperErrandDetails = () => {
                   color={colors.textTertiary}
                 />
                 <Text
-                  style={[styles.checklistLockText, { color: colors.textTertiary }]}
+                  style={[
+                    styles.checklistLockText,
+                    { color: colors.textTertiary },
+                  ]}
                 >
                   {isHandsOn
                     ? "Start work to unlock the checklist"
@@ -573,8 +628,6 @@ const HelperErrandDetails = () => {
           </View>
 
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-          
 
           {/* Actions — when in progress */}
           {isActive && (
@@ -851,7 +904,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   mapText: { fontSize: 14 },
+  navigateBtns: { flexDirection: "row", gap: 12 },
   navigateBtn: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

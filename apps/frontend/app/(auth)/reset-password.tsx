@@ -10,6 +10,10 @@ import Input from "@/components/ui/input";
 import Toast from "react-native-toast-message";
 import { useResetPasswordMutation } from "@/store/api";
 
+// Defined inline (rather than reusing shared/resetPasswordSchema) because
+// the UI form has a `confirmPassword` field that we validate client-side
+// only — the server never sees it, so it doesn't belong in the shared
+// schema used by the API.
 const resetPasswordSchema = z
   .object({
     password: z.string().min(8, "Password must be at least 8 characters"),
@@ -25,6 +29,8 @@ type ResetPasswordForm = z.infer<typeof resetPasswordSchema>;
 const ResetPassword = () => {
   const router = useRouter();
   const colorScheme = useColorScheme();
+  // Reset token arrives via a deep link param from the email — the
+  // backend's /reset-password endpoint is what actually validates it.
   const { token } = useLocalSearchParams() as { token: string };
   const colors = Colors[colorScheme ?? "dark"];
 
@@ -48,6 +54,8 @@ const ResetPassword = () => {
     } catch (err) {
       Toast.show({ type: "error", text1: "Invalid or expired reset link" });
     } finally {
+      // Always return to login afterwards — whether the reset succeeded or
+      // the token was rejected, the single-use reset link is now spent.
       router.replace("/(auth)/login");
     }
   };

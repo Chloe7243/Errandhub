@@ -56,7 +56,6 @@ model User {
   resetTokenExpiry  DateTime?
   requestedErrands  Errand[]       @relation("RequesterErrands")
   helpingErrands    Errand[]       @relation("HelperErrands")
-  messages          Message[]      @relation("UserMessages")
   raisedDisputes    Dispute[]      @relation("RaisedDisputes")
   userSettings      UserSettings[]
 }
@@ -103,22 +102,9 @@ model Errand {
   finalLat              Float?
   finalLng              Float?
 
-  messages  Message[] @relation("ErrandMessages")
-  helper    User?     @relation("HelperErrands", fields: [helperId], references: [id])
-  requester User      @relation("RequesterErrands", fields: [requesterId], references: [id])
+  helper    User?    @relation("HelperErrands", fields: [helperId], references: [id])
+  requester User     @relation("RequesterErrands", fields: [requesterId], references: [id])
   dispute   Dispute?
-}
-
-model Message {
-  id        String   @id @default(cuid())
-  errandId  String
-  senderId  String
-  content   String?
-  imageUrl  String?
-  createdAt DateTime @default(now())
-
-  errand Errand @relation("ErrandMessages", fields: [errandId], references: [id])
-  sender User   @relation("UserMessages", fields: [senderId], references: [id])
 }
 
 // model Rating {

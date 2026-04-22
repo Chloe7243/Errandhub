@@ -6,47 +6,72 @@ import { WebView } from "react-native-webview";
 type Props = {
   firstLat: number;
   firstLng: number;
+  currentLat?: number;
+  currentLng?: number;
   finalLat?: number;
   finalLng?: number;
-  style?: ViewStyle;
+  firstColor?: string;
+  currentColor?: string;
+  lastColor?: string;
 };
 
-const buildHtml = (
-  firstLat: number,
-  firstLng: number,
-  finalLat?: number,
-  finalLng?: number,
-  dark?: boolean,
-) => {
-  const hasDropoff = finalLat !== undefined && finalLng !== undefined;
+/**
+ * Construct the Leaflet+OpenStreetMap HTML document embedded in the map
+ * WebView. We use a WebView instead of react-native-maps because:
+ *   - no Google API key / billing setup (student project)
+ *   - one HTML string renders identically on iOS and Android
+ *   - CARTO's dark basemap aligns with the app's dark theme
+ * The HTML is rebuilt on every render because coordinates are baked into
+ * the script — there's no meaningful cache key to invalidate separately.
+ */
+const buildHtml = (props: Props & { dark?: boolean }) => {
+  const hasDropoff =
+    props.finalLat !== undefined && props.finalLng !== undefined;
+  const hasCurrentLocation =
+    props.currentLat !== undefined && props.currentLng !== undefined;
 
-  const centreLat = hasDropoff ? (firstLat + finalLat!) / 2 : firstLat;
-  const centreLng = hasDropoff ? (firstLng + finalLng!) / 2 : firstLng;
-
+  // Pad the bounding box so pins don't sit flush against the edges of the
+  // tile. ~0.012 degrees ≈ 1.3km which works well for typical campus-scale
+  // pickup/drop-off distances in this app.
   const padding = 0.012;
-  const lats = hasDropoff ? [firstLat, finalLat!] : [firstLat];
-  const lngs = hasDropoff ? [firstLng, finalLng!] : [firstLng];
+  const lats = hasDropoff
+    ? [props.firstLat, props.finalLat!]
+    : [props.firstLat];
+  const lngs = hasDropoff
+    ? [props.firstLng, props.finalLng!]
+    : [props.firstLng];
   const south = Math.min(...lats) - padding;
   const north = Math.max(...lats) + padding;
   const west = Math.min(...lngs) - padding;
   const east = Math.max(...lngs) + padding;
 
   const dropoffMarker = hasDropoff
-    ? `L.marker([${finalLat}, ${finalLng}], {
+    ? `L.marker([${props.finalLat}, ${props.finalLng}], {
         icon: L.divIcon({
           className: '',
-          html: '<div style="width:14px;height:14px;border-radius:50%;background:#ef4444;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>',
+          html: '<div style="width:14px;height:14px;border-radius:50%;background:${props.lastColor};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>',
           iconSize: [14, 14],
           iconAnchor: [7, 7],
         })
       }).addTo(map).bindPopup('Drop-off');`
     : "";
 
-  const tileUrl = dark
+  const currentMarker = hasCurrentLocation
+    ? `L.marker([${props.currentLat}, ${props.currentLng}], {
+        icon: L.divIcon({
+          className: '',
+          html: '<div style="width:14px;height:14px;border-radius:50%;background:${props.currentColor};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>',
+          iconSize: [14, 14],
+          iconAnchor: [7, 7],
+        })
+      }).addTo(map).bindPopup('Drop-off');`
+    : "";
+
+  const tileUrl = props.dark
     ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
     : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
 
-  const attribution = dark
+  const attribution = props.dark
     ? "&copy; OpenStreetMap &copy; CARTO"
     : "&copy; OpenStreetMap contributors";
 
@@ -71,33 +96,37 @@ const buildHtml = (
 
     L.tileLayer('${tileUrl}', { attribution: '${attribution}', maxZoom: 19 }).addTo(map);
 
-    L.marker([${firstLat}, ${firstLng}], {
+    L.marker([${props.firstLat}, ${props.firstLng}], {
       icon: L.divIcon({
         className: '',
-        html: '<div style="width:14px;height:14px;border-radius:50%;background:#6366f1;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>',
+        html: '<div style="width:14px;height:14px;border-radius:50%;background:${props.firstColor};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4)"></div>',
         iconSize: [14, 14],
         iconAnchor: [7, 7],
       })
     }).addTo(map).bindPopup('Pickup');
 
+    ${currentMarker}
     ${dropoffMarker}
   </script>
 </body>
 </html>`;
 };
 
-const MapPreview = ({
-  firstLat,
-  firstLng,
-  finalLat,
-  finalLng,
-  style,
-}: Props) => {
+/**
+ * Small non-interactive map card used on errand details / tracking screens.
+ *
+ * Drops pins for the pickup, optional current helper location, and optional
+ * drop-off, fits the viewport to show all of them with a little padding,
+ * and switches the basemap between CARTO dark and OSM standard based on
+ * the active colour scheme. Pan/zoom and attribution are disabled since
+ * this is a preview only.
+ */
+const MapPreview = ({ style, ...mapProps }: Props & { style?: ViewStyle }) => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const dark = colorScheme === "dark";
 
-  const html = buildHtml(firstLat, firstLng, finalLat, finalLng, dark);
+  const html = buildHtml({ ...mapProps, dark });
 
   return (
     <View style={[styles.container, { borderColor: colors.border }, style]}>

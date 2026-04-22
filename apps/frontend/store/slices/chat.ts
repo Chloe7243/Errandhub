@@ -8,6 +8,10 @@ export type Message = {
   createdAt: string;
 };
 
+// Keyed by errandId because chat threads are scoped to an errand — once the
+// errand terminates the thread is archived with it. Holding this in redux
+// (rather than only on the socket) lets screens render instantly when
+// re-mounted and supports optimistic sends.
 type ChatState = {
   messagesByErrand: Record<string, Message[]>;
 };

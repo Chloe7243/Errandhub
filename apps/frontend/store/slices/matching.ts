@@ -1,3 +1,7 @@
+// Holds the transient state of the real-time matching handshake between
+// requester and helper. These fields are fed by socket events (dispatch
+// request, counter offer, expiry, assignment) rather than HTTP, so they
+// live outside RTK Query's cache.
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 export type HelperProfile = {

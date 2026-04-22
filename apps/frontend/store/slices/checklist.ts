@@ -1,3 +1,6 @@
+// Per-errand shopping/delivery checklist progress. Only the booleans live
+// here — the item labels themselves are parsed from the errand description
+// (see parseChecklist below) so they stay authoritative on the backend.
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
 type ChecklistState = {
@@ -30,8 +33,15 @@ const checklistSlice = createSlice({
 export const { toggleItem, clearProgress } = checklistSlice.actions;
 export default checklistSlice.reducer;
 
-// Helper: parse description string → string[]
-// Handles both new JSON format and old plain-text descriptions
+/**
+ * Extract a checklist of items from an errand description.
+ *
+ * New errands store the checklist as a JSON-encoded string array inside
+ * the description field; older errands (and freeform descriptions) are
+ * plain text. This helper transparently supports both: a parseable JSON
+ * array is returned as-is, anything else falls back to a single-item
+ * array so callers can treat the output uniformly.
+ */
 export const parseChecklist = (description: string): string[] => {
   try {
     const parsed = JSON.parse(description);

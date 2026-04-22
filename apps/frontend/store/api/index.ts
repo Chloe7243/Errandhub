@@ -15,6 +15,8 @@ import {
 import { TAGS } from "@/utils/constants";
 import { logoutUser } from "../slices";
 
+// Base fetcher: reads the JWT out of the auth slice and attaches it so
+// every RTK Query call is automatically authenticated.
 const baseQuery = fetchBaseQuery({
   baseUrl: process.env.EXPO_PUBLIC_API_URL,
   prepareHeaders: (headers, { getState }) => {
@@ -27,6 +29,9 @@ const baseQuery = fetchBaseQuery({
   },
 });
 
+// Wraps baseQuery so a 401 anywhere in the app (expired/invalid token)
+// triggers a logout and returns the user to the auth stack, rather than
+// silently failing in whichever screen issued the call.
 const baseQueryWithReauth = async (
   args: string | FetchArgs,
   api: BaseQueryApi,
@@ -38,6 +43,9 @@ const baseQueryWithReauth = async (
   return result;
 };
 
+// Root RTK Query slice. Feature-specific endpoints are added via
+// `api.injectEndpoints` in errand.ts, user.ts, payment.ts — keeping them
+// separate avoids a single monolithic definition.
 export const api = createApi({
   refetchOnReconnect: true,
   tagTypes: Object.values(TAGS),

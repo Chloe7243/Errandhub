@@ -9,6 +9,15 @@ type Props = {
   size?: number;
 };
 
+/**
+ * Circular profile image with an initials fallback.
+ *
+ * Renders the uploaded image at `uri` when present, otherwise draws a
+ * coloured disc containing the user's initials. Avoids the standard
+ * broken-image placeholder and keeps list rows visually aligned whether
+ * or not the user has uploaded a photo. `size` drives both the disc and
+ * text sizing via a 0.35 ratio.
+ */
 const Avatar = ({ uri, firstName = "", lastName = "", size = 40 }: Props) => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];

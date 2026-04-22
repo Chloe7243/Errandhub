@@ -18,6 +18,15 @@ type Props = {
   onDecline: () => void;
 };
 
+/**
+ * Requester-side modal shown when a helper proposes an alternative price.
+ *
+ * The countdown is driven by the server-provided `expiresAt`: two parallel
+ * effects keep the text label in sync (per-second setState) and the
+ * progress bar in sync (single Animated timing). onAccept/onDecline are
+ * wired to the socket actions on the parent screen so the server can
+ * confirm the assignment or roll on to the next candidate.
+ */
 const CounterOfferModal = ({ counterOffer, onAccept, onDecline }: Props) => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];

@@ -12,6 +12,9 @@ import { requireRole } from "../middleware/role";
 
 const router = Router();
 
+// Profile and settings endpoints. The two /-errands endpoints are split by
+// role because the returned shape (requester vs helper view) and the
+// summary aggregates differ.
 router.get("/me", getUser);
 router.patch("/avatar", updateAvatar);
 router.post("/push-token", savePushToken);

@@ -11,6 +11,9 @@ export type SavedCard = {
   };
 };
 
+// Payment endpoints. getSetupIntent is a *mutation* (not a query) because
+// each call issues a fresh Stripe SetupIntent client secret that is
+// intended to be consumed once and then discarded.
 const paymentApi = api.injectEndpoints({
   endpoints: (build) => ({
     getSetupIntent: build.mutation<{ clientSecret: string }, void>({

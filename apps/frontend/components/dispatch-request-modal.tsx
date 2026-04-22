@@ -18,6 +18,16 @@ type Props = {
   onCounterOffer: (amount: number) => void;
 };
 
+/**
+ * Helper-side dispatch modal for an incoming errand request.
+ *
+ * Two views sharing one countdown: the initial accept/negotiate/decline
+ * screen, and the negotiation screen with a +/- counter-offer stepper
+ * (£0.50 increments, bounded between suggestedPrice and 2x suggestedPrice
+ * to match the backend's validation). When the countdown hits zero the
+ * component auto-fires onDecline so the backend can roll on to the next
+ * candidate without waiting on the user.
+ */
 const DispatchRequestModal = ({
   helperRequest,
   onAccept,
@@ -250,6 +260,8 @@ const DispatchRequestModal = ({
                   styles.counterButton,
                   { backgroundColor: colors.background },
                 ]}
+                // Floor at the original suggested price — a helper can
+                // propose more but not less than the requester offered.
                 onPress={() =>
                   setCounterAmount((prev) =>
                     Math.max(helperRequest.suggestedPrice, prev - 0.5),
@@ -270,6 +282,8 @@ const DispatchRequestModal = ({
                   styles.counterButton,
                   { backgroundColor: colors.background },
                 ]}
+                // Cap at 2x the suggested price to keep counter offers
+                // reasonable and discourage silly lowball/highball games.
                 onPress={() =>
                   setCounterAmount((prev) =>
                     Math.min(helperRequest.suggestedPrice * 2, prev + 0.5),

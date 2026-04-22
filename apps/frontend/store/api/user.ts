@@ -2,6 +2,9 @@ import { ErrandStatus } from "@errandhub/shared";
 import { api } from ".";
 import { TAGS } from "@/utils/constants";
 
+// User/profile endpoints. The two list queries accept an optional status
+// filter — RTK Query keys cache entries on the argument so filtered and
+// unfiltered views coexist without stomping on each other.
 const usersApi = api.injectEndpoints({
   endpoints: (builder) => ({
     getUserDetails: builder.query({

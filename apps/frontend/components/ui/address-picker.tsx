@@ -74,6 +74,12 @@ const FIELDS_CONFIG = [
   },
 ];
 
+/**
+ * EasyPostcodes.com is a UK-only postcode lookup used in place of Google
+ * Places because Places charges per request and the app is pre-revenue.
+ * The vendor is free up to a generous quota and returns structured line1,
+ * line2, post town and lat/lng in a single call.
+ */
 const EASY_POSTCODE_API_KEY =
   process.env.EXPO_PUBLIC_EASY_POSTCODE_API_KEY ?? "";
 
@@ -116,6 +122,19 @@ const searchAddresses = async (postcode: string): Promise<SearchResult[]> => {
 const composeAddress = (f: AddressFields) =>
   [f.line1, f.line2, f.area, f.postcode].filter(Boolean).join(", ");
 
+/**
+ * Modal address picker used wherever the requester needs to enter an
+ * errand location. Combines a debounced UK postcode search (via
+ * EasyPostcodes) with editable address-line fields, and emits both the
+ * composed string and the resolved coordinates back to the parent so the
+ * backend can do proximity matching. Props:
+ *   - label / placeholder: display-only text for the trigger.
+ *   - value: the currently-selected composed address string.
+ *   - onSelect: called with the new composed address on confirm.
+ *   - onCoordinatesSelect: optional — called with lat/lng if the search
+ *     result carried geo data (manual edits skip this).
+ *   - error: inline error string shown under the trigger.
+ */
 const AddressPicker = ({
   label,
   placeholder,
@@ -147,6 +166,10 @@ const AddressPicker = ({
     setOpen(true);
   };
 
+  // Debounced postcode search. The 1.5s delay (longer than the typical
+  // 300ms) is deliberate — full UK postcodes are only 6-8 chars and users
+  // tend to type them in one burst, so a longer wait cuts down wasted
+  // partial-string API calls (e.g. "CV1", "CV1 ").
   const handleSearch = (text: string) => {
     setQuery(text);
     setSearchError(null);

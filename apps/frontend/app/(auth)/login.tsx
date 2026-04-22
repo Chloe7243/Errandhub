@@ -41,6 +41,10 @@ const Login = () => {
     resolver: zodResolver(loginSchema),
   });
 
+  // Dispatching loginUser (a thunk) rather than setCredentials directly so
+  // the JWT is persisted to SecureStore before redux is updated — the root
+  // layout's redirect depends on isAuthenticated flipping only once the
+  // token is actually recoverable on next cold start.
   const onSubmit = async (data: LoginForm) => {
     if (isLoading) return;
     try {
@@ -48,6 +52,8 @@ const Login = () => {
       dispatch(loginUser({ user: response.user, token: response.token }));
     } catch (error) {
       console.error("Login failed:", error);
+      // Deliberately generic — we don't want to leak whether it was the
+      // email or the password that didn't match.
       Toast.show({
         type: "error",
         text1: "Login failed",

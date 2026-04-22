@@ -6,6 +6,11 @@ import { useRouter } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+// Unauthenticated landing screen. Kept visually simple because the root
+// _layout redirects straight past it if a saved JWT is found; users only
+// actually see this on a fresh install or after logout. Google/Apple
+// buttons are placeholders — provider-specific OAuth is out of scope for
+// the FYP but the UI is in place for a later pass.
 const HomeScreen = () => {
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -72,13 +77,13 @@ const HomeScreen = () => {
           </Text>
         </TouchableOpacity>
         {/* Apple Sign in Button */}
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={[styles.thirdPartyButton, { borderColor: colors.border }]}
           onPress={() => router.push("/(auth)/signup")}
         >
           <FontAwesome name="apple" size={24} color={colors.text} />
           <Text style={[styles.buttonText, { color: colors.text }]}>Apple</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
       <Text
         style={{

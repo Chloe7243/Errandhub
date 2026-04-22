@@ -10,6 +10,7 @@ import { User } from "@/types";
 import { activeStatuses } from "@errandhub/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";
+import { useEffect } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -31,8 +32,11 @@ const Home = () => {
     { refetchOnMountOrArgChange: true },
   );
 
-  const { totalActive = 0, totalCompleted = 0, totalErrands = 0 } =
-    activeErrands?.summary ?? {};
+  const {
+    totalActive = 0,
+    totalCompleted = 0,
+    totalErrands = 0,
+  } = activeErrands?.summary ?? {};
   const anyActiveErrands = (activeErrands?.errands.length ?? 0) > 0;
 
   const greeting = (() => {
@@ -41,6 +45,8 @@ const Home = () => {
     if (hour < 18) return "Good afternoon,";
     return "Good evening,";
   })();
+
+  useEffect(() => {}, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

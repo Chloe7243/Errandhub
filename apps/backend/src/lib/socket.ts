@@ -22,6 +22,16 @@ type UserSocketEntry = {
 
 const userSockets = new Map<string, UserSocketEntry>();
 
+/**
+ * Initialise the Socket.IO server and wire up all realtime handlers.
+ *
+ * Mounts onto the existing HTTP server, verifies JWTs on the handshake,
+ * tracks one entry per user with a Set of socketIds (supports multiple
+ * devices/tabs), and handles: chat messages, errand rooms, helper matching
+ * responses (accept/decline/counter-offer), requester counter-offer
+ * replies, and in-memory helper location updates. Returns the Socket.IO
+ * Server instance so callers can attach additional namespaces if needed.
+ */
 export const initSocket = (httpServer: HttpServer) => {
   io = new Server(httpServer, {
     cors: {
@@ -58,6 +68,9 @@ export const initSocket = (httpServer: HttpServer) => {
       userSockets.set(userId, { socketIds: new Set([socket.id]), role });
     }
 
+    // Errand rooms are used for chat only. Matching events are sent directly to
+    // userSockets (via emitToUser) so they reach the right user regardless of which
+    // room they are currently in.
     socket.on("join_room", (errandId: string) => {
       socket.join(errandId);
     });
@@ -90,11 +103,14 @@ export const initSocket = (httpServer: HttpServer) => {
         });
 
         if (errand) {
+          // Deliver to both parties via emitToUser (not io.to(room)) so the message
+          // reaches all of a user's connected devices, not just the room socket.
           emitToUser(errand.requesterId, "receive_message", message);
           if (errand.helperId) {
             emitToUser(errand.helperId, "receive_message", message);
           }
 
+          // Push-notify the other participant (not the sender).
           const recipientId =
             userId === errand.requesterId
               ? errand.helperId
@@ -110,7 +126,7 @@ export const initSocket = (httpServer: HttpServer) => {
               ? content.length > 60
                 ? content.slice(0, 57) + "..."
                 : content
-              : "📷 Sent an image";
+              : "Sent an image";
 
             await notifyUser(recipientId, {
               title: `${senderName} sent a message`,
@@ -119,7 +135,7 @@ export const initSocket = (httpServer: HttpServer) => {
             });
           }
         } else {
-          // Fallback: broadcast to room
+          // Errand not found — fall back to room broadcast so the message still arrives.
           io?.to(errandId).emit("receive_message", message);
         }
       },
@@ -151,6 +167,8 @@ export const initSocket = (httpServer: HttpServer) => {
       },
     );
 
+    // Location is stored in memory only — not persisted to DB — to avoid write storms
+    // during active navigation. The matching service reads it directly from userSockets.
     socket.on(
       "update_location",
       ({ lat, lng }: { lat: number; lng: number }) => {
@@ -184,12 +202,23 @@ export type ConnectedHelper = {
   coordinates?: { lat: number; lng: number };
 };
 
+/**
+ * Return every currently-connected user whose JWT role is "helper", along
+ * with their most recently reported coordinates. Consumed by the matching
+ * service to filter candidates by proximity to a new errand.
+ */
 export const getConnectedHelpers = (): ConnectedHelper[] =>
   Array.from(userSockets.entries())
     .filter(([, value]) => value.role === "helper")
     .map(([userId, value]) => ({ userId, coordinates: value.coordinates }));
 
-// Emits to ALL active sockets for a user (covers multiple tabs/devices)
+/**
+ * Emit a Socket.IO event to every active socket belonging to a user.
+ *
+ * Iterates the user's socketIds so the event reaches all open tabs/devices.
+ * Returns true if at least one socket received the event, false if the user
+ * is currently offline (no sockets registered).
+ */
 export const emitToUser = (userId: string, event: string, payload: any) => {
   if (!io) return false;
   const entry = userSockets.get(userId);

@@ -12,14 +12,13 @@ import { Colors } from "@/constants/theme";
 import { FontAwesome6, Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import BackButton from "@/components/ui/back-button";
-import { useGetErrandByIdQuery, useSetPaymentMethodMutation } from "@/store/api/errand";
-import {
-  useGetPaymentMethodsQuery,
-  type SavedCard,
-} from "@/store/api/payment";
-import { useState } from "react";
+import { useCreateErrandMutation } from "@/store/api/errand";
+import { type CreateErrandInput } from "@errandhub/shared";
+import { useGetPaymentMethodsQuery, type SavedCard } from "@/store/api/payment";
+import { useEffect, useMemo, useState } from "react";
 import Toast from "react-native-toast-message";
 import { displayErrorMessage } from "@/utils/errors";
+import AddPaymentMethodButton from "@/components/add-payment-method";
 
 const CARD_BRAND_ICONS: Record<string, React.ReactNode> = {
   visa: <FontAwesome6 name="cc-visa" size={24} color="black" />,
@@ -35,25 +34,35 @@ const Payment = () => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const router = useRouter();
-  const { errandId } = useLocalSearchParams<{ errandId: string }>();
-
-  const { data: errandData, isLoading: errandLoading } = useGetErrandByIdQuery(
-    errandId!,
-    { skip: !errandId },
+  const { errandData: errandDataParam } = useLocalSearchParams<{
+    errandData: string;
+  }>();
+  const pendingErrand = useMemo<CreateErrandInput>(
+    () => JSON.parse(errandDataParam!),
+    [errandDataParam],
   );
+
   const { data: methodsData, isLoading: cardsLoading } =
     useGetPaymentMethodsQuery();
-  const [setPaymentMethod, { isLoading: isSettingMethod }] =
-    useSetPaymentMethodMutation();
+  const [createErrand, { isLoading: isSettingMethod }] =
+    useCreateErrandMutation();
 
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
 
-  const errand = errandData?.errand;
-  const cards: SavedCard[] = methodsData?.paymentMethods ?? [];
+  const cards: SavedCard[] = useMemo(
+    () => methodsData?.paymentMethods ?? [],
+    [methodsData],
+  );
 
-  const helperPayment = errand?.suggestedPrice ?? 5;
+  const SUGGESTED_PRICE = 5.0;
+  const helperPayment = SUGGESTED_PRICE;
   const stripeFee = stripeFeeFor(helperPayment);
   const total = helperPayment + stripeFee;
+
+  useEffect(() => {
+    if (!cards || cards.length === 0) return;
+    setSelectedCardId(cards[0].id);
+  }, [cards]);
 
   const handlePay = async () => {
     if (!selectedCardId) {
@@ -61,18 +70,18 @@ const Payment = () => {
       return;
     }
     try {
-      await setPaymentMethod({
-        errandId: errandId!,
+      const result = await createErrand({
+        ...pendingErrand,
         paymentMethodId: selectedCardId,
       }).unwrap();
       Toast.show({ type: "success", text1: "Errand posted successfully" });
-      router.replace(`/requester/errand-details?id=${errandId}`);
+      router.replace(`/requester/errand-details?id=${result.errand.id}`);
     } catch (err) {
       displayErrorMessage(err);
     }
   };
 
-  if (errandLoading || cardsLoading) {
+  if (cardsLoading) {
     return (
       <SafeAreaView
         style={[styles.container, { backgroundColor: colors.background }]}
@@ -125,7 +134,7 @@ const Payment = () => {
               ]}
               numberOfLines={1}
             >
-              {errand?.title ?? "—"}
+              {pendingErrand.title}
             </Text>
           </View>
           <View style={styles.row}>
@@ -133,11 +142,11 @@ const Payment = () => {
               Type
             </Text>
             <Text style={[styles.value, { color: colors.text }]}>
-              {errand?.type === "SHOPPING"
+              {pendingErrand.type === "SHOPPING"
                 ? "Shopping"
-                : errand?.type === "HANDS_ON_HELP"
-                ? "Hands-On Help"
-                : "Pickup / Delivery"}
+                : pendingErrand.type === "HANDS_ON_HELP"
+                  ? "Hands-On Help"
+                  : "Pickup / Delivery"}
             </Text>
           </View>
           <View style={styles.row}>
@@ -151,10 +160,10 @@ const Payment = () => {
               ]}
               numberOfLines={1}
             >
-              {errand?.firstLocation ?? "—"}
+              {pendingErrand.firstLocation}
             </Text>
           </View>
-          {errand?.type !== "HANDS_ON_HELP" && (
+          {pendingErrand.type !== "HANDS_ON_HELP" && (
             <View style={styles.row}>
               <Text style={[styles.label, { color: colors.textSecondary }]}>
                 Drop-off
@@ -166,7 +175,7 @@ const Payment = () => {
                 ]}
                 numberOfLines={1}
               >
-                {errand?.finalLocation ?? "—"}
+                {pendingErrand.finalLocation}
               </Text>
             </View>
           )}
@@ -183,7 +192,7 @@ const Payment = () => {
             Payment Breakdown
           </Text>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          {errand?.type === "HANDS_ON_HELP" ? (
+          {pendingErrand.type === "HANDS_ON_HELP" ? (
             <>
               <View style={styles.row}>
                 <Text style={[styles.label, { color: colors.textSecondary }]}>
@@ -198,7 +207,8 @@ const Payment = () => {
                   Est. Duration
                 </Text>
                 <Text style={[styles.value, { color: colors.text }]}>
-                  {errand.estimatedDuration ?? "?"} hr{(errand.estimatedDuration ?? 0) !== 1 ? "s" : ""}
+                  {pendingErrand.estimatedDuration ?? "?"} hr
+                  {(pendingErrand.estimatedDuration ?? 0) !== 1 ? "s" : ""}
                 </Text>
               </View>
               <View style={styles.row}>
@@ -206,7 +216,10 @@ const Payment = () => {
                   Est. Total
                 </Text>
                 <Text style={[styles.value, { color: colors.text }]}>
-                  ~£{((errand.estimatedDuration ?? 0) * helperPayment).toFixed(2)}
+                  ~£
+                  {(
+                    (pendingErrand.estimatedDuration ?? 0) * helperPayment
+                  ).toFixed(2)}
                 </Text>
               </View>
             </>
@@ -269,12 +282,7 @@ const Payment = () => {
               >
                 No saved cards yet.
               </Text>
-              <TouchableOpacity
-                style={[styles.goToProfileBtn, { backgroundColor: colors.primary }]}
-                onPress={() => router.push("/requester/profile")}
-              >
-                <Text style={styles.goToProfileText}>Go to Profile</Text>
-              </TouchableOpacity>
+              <AddPaymentMethodButton />
             </View>
           ) : (
             cards.map((card) => {
@@ -341,9 +349,28 @@ const Payment = () => {
             color={colors.textTertiary}
           />
           <Text style={[styles.noteText, { color: colors.textTertiary }]}>
-            {errand?.type === "HANDS_ON_HELP"
+            {pendingErrand.type === "HANDS_ON_HELP"
               ? "Payment is authorized now and calculated based on actual time worked. Released when you confirm completion."
               : "Payment is held securely and only released once you confirm the errand is complete."}
+          </Text>
+        </View>
+        <View
+          style={[
+            styles.note,
+            {
+              backgroundColor: colors.backgroundSecondary,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Ionicons
+            name="information-circle-outline"
+            size={16}
+            color={colors.textTertiary}
+          />
+
+          <Text style={[styles.noteText, { color: colors.textTertiary }]}>
+            {"Payment is subject to change if negotiations are done"}
           </Text>
         </View>
 
@@ -364,7 +391,7 @@ const Payment = () => {
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.payButtonText}>
-              {errand?.type === "HANDS_ON_HELP"
+              {pendingErrand.type === "HANDS_ON_HELP"
                 ? "Confirm & Post Errand"
                 : `Pay & Post Errand — £${total.toFixed(2)}`}
             </Text>

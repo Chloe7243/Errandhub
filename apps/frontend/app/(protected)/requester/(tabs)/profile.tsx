@@ -15,10 +15,7 @@ import {
 import {
   useGetPaymentMethodsQuery,
   useDeletePaymentMethodMutation,
-  useGetSetupIntentMutation,
 } from "@/store/api/payment";
-import { useStripe } from "@stripe/stripe-react-native";
-import { api } from "@/store/api";
 import * as ImagePicker from "expo-image-picker";
 import { useAppDispatch } from "@/store/hooks";
 import { logoutUser, updateUserState } from "@/store/slices";
@@ -37,6 +34,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 import { displayErrorMessage } from "@/utils/errors";
+import AddPaymentMethodButton from "@/components/add-payment-method";
 
 type Section =
   | null
@@ -117,40 +115,8 @@ const Profile = () => {
 
   const { data: methodsData } = useGetPaymentMethodsQuery();
   const [deletePaymentMethod] = useDeletePaymentMethodMutation();
-  const [getSetupIntent, { isLoading: isAddingCard }] =
-    useGetSetupIntentMutation();
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
 
   const savedCards = methodsData?.paymentMethods ?? [];
-
-  const handleAddCard = async () => {
-    try {
-      const { clientSecret } = await getSetupIntent().unwrap();
-
-      const { error: initError } = await initPaymentSheet({
-        setupIntentClientSecret: clientSecret,
-        merchantDisplayName: "ErrandHub",
-        allowsDelayedPaymentMethods: false,
-      });
-      if (initError) {
-        Toast.show({ type: "error", text1: initError.message });
-        return;
-      }
-
-      const { error } = await presentPaymentSheet();
-      if (error) {
-        if (error.code !== "Canceled") {
-          Toast.show({ type: "error", text1: error.message });
-        }
-        return;
-      }
-
-      dispatch(api.util.invalidateTags(["payment methods"]));
-      Toast.show({ type: "success", text1: "Card added successfully" });
-    } catch (err) {
-      displayErrorMessage(err);
-    }
-  };
 
   const handleDeleteCard = (cardId: string, last4: string) => {
     Alert.alert("Remove Card", `Remove card ending in ${last4}?`, [
@@ -334,7 +300,6 @@ const Profile = () => {
                   </Text>
                 </View>
               )}
-
               {savedCards.map((card) => (
                 <View
                   key={card.id}
@@ -373,27 +338,8 @@ const Profile = () => {
                   </TouchableOpacity>
                 </View>
               ))}
-
-              <TouchableOpacity
-                style={[
-                  styles.saveButton,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                    borderWidth: 1,
-                    opacity: isAddingCard ? 0.6 : 1,
-                  },
-                ]}
-                onPress={handleAddCard}
-                disabled={isAddingCard}
-              >
-                <Ionicons name="add" size={18} color={colors.text} />
-                <Text style={[styles.saveText, { color: colors.text }]}>
-                  {isAddingCard ? "Opening..." : "Add Payment Method"}
-                </Text>
-              </TouchableOpacity>
+              <AddPaymentMethodButton />
             </ExpandableSection>
-
             {/* Notifications */}
             <ExpandableSection
               icon="notifications-outline"

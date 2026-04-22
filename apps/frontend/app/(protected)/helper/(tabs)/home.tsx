@@ -8,14 +8,16 @@ import {
   useGetHelpedErrandsQuery,
   useGetSettingsQuery,
 } from "@/store/api/user";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { setPermissionStatus, setCoordinates } from "@/store/slices/location";
 import { User } from "@/types";
 import { formatErrandType } from "@/utils/errand";
 import { getSocket } from "@/utils/socket";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -30,10 +32,10 @@ const HelperHome = () => {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
+  const dispatch = useAppDispatch();
   const user = useAppSelector((state: RootState) => state.auth.user) as User;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [location, setLocation] = useState<Location.LocationObject | null>(
-    null,
+  const locationPermission = useAppSelector(
+    (state: RootState) => state.location.permissionStatus,
   );
 
   const { currentData: activeData, isLoading } = useGetHelpedErrandsQuery(
@@ -46,12 +48,21 @@ const HelperHome = () => {
   );
   const { currentData: settingsData } = useGetSettingsQuery(null);
 
+  useEffect(() => {}, []);
+
   useEffect(() => {
     (async function getCurrentLocation() {
-      let { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      dispatch(
+        setPermissionStatus(status === "granted" ? "granted" : "denied"),
+      );
       if (status !== "granted") return;
+
       const loc = await Location.getCurrentPositionAsync({});
-      setLocation(loc);
+      dispatch(
+        setCoordinates({ lat: loc.coords.latitude, lng: loc.coords.longitude }),
+      );
+
       const socket = getSocket();
       socket?.emit("update_location", {
         lat: loc.coords.latitude,
@@ -89,6 +100,38 @@ const HelperHome = () => {
 
   const activeTask = activeData?.errands?.[0] ?? null;
   const hasActiveTask = !!activeTask;
+
+  if (locationPermission === "denied") {
+    return (
+      <SafeAreaView
+        style={[
+          styles.container,
+          styles.blockedContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        <MaterialIcons
+          name="location-off"
+          size={56}
+          color={colors.textTertiary}
+        />
+        <Text style={[styles.blockedTitle, { color: colors.text }]}>
+          Location Required
+        </Text>
+        <Text style={[styles.blockedBody, { color: colors.textSecondary }]}>
+          {
+            "ErrandHub needs your location to match you with nearby errands. Without it you won't appear in any requester's search."
+          }
+        </Text>
+        <TouchableOpacity
+          style={[styles.settingsButton, { backgroundColor: colors.primary }]}
+          onPress={() => Linking.openSettings()}
+        >
+          <Text style={styles.settingsButtonText}>Open Settings</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -354,6 +397,21 @@ export default HelperHome;
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  blockedContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 36,
+    gap: 16,
+  },
+  blockedTitle: { fontSize: 22, fontWeight: "700", textAlign: "center" },
+  blockedBody: { fontSize: 15, textAlign: "center", lineHeight: 22 },
+  settingsButton: {
+    marginTop: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+  },
+  settingsButtonText: { color: "#fff", fontSize: 15, fontWeight: "600" },
   header: {
     paddingHorizontal: 16,
     paddingVertical: 16,

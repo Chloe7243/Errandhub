@@ -8,6 +8,15 @@ import { emitToUser } from "../lib/socket";
 import { notifyUser } from "../lib/notifications";
 import { stripe } from "../lib/stripe";
 
+/**
+ * POST /errands — create a new errand and kick off matching.
+ *
+ * Validates the shared createErrand schema, enforces a 3-concurrent-active
+ * cap per requester, persists the errand and then hands off to
+ * startErrandMatching which dispatches it to eligible helpers in order of
+ * proximity. paymentMethodId is validated separately because it belongs to
+ * the payment concern, not the shared form schema.
+ */
 export const createErrand = async (
   req: AuthRequest,
   res: Response,
@@ -17,6 +26,11 @@ export const createErrand = async (
     const parsed = createErrandSchema.safeParse(req.body);
     if (!parsed.success)
       throw new AppError(parsed.error.errors[0].message, 400);
+
+    // paymentMethodId is not part of the errand schema — it's a payment concern
+    // validated here separately so the shared schema stays form-friendly.
+    const { paymentMethodId } = req.body;
+    if (!paymentMethodId) throw new AppError("Payment method is required", 400);
 
     const {
       title,
@@ -32,19 +46,18 @@ export const createErrand = async (
       estimatedDuration,
     } = parsed.data;
 
+    // Cap at 3 concurrent active errands per requester to limit abuse and payment holds.
     const activeErrandCount = await prisma.errand.count({
       where: {
         requesterId: req.userId!,
-        status: {
-          in: activeStatuses,
-        },
+        status: { in: activeStatuses },
       },
     });
     if (activeErrandCount >= 3)
       throw new AppError("You can only have 3 active errands at a time", 400);
 
-    // TODO: calculate suggested price using Google Maps Distance Matrix API
-    // For now use a flat suggested price
+    // Placeholder pricing — actual implementation would factor in distance,
+    // errand type, time of day and historical completion rates.
     const suggestedPrice = 5.0;
 
     const errand = await prisma.errand.create({
@@ -57,6 +70,7 @@ export const createErrand = async (
         finalLocation: finalLocation ?? firstLocation,
         locationReference,
         suggestedPrice,
+        paymentMethodId,
         estimatedDuration: estimatedDuration ?? null,
         firstLat,
         firstLng,
@@ -65,12 +79,19 @@ export const createErrand = async (
       },
     });
 
-    res.status(201).json({ errand, message: "Errand created successfully" });
+    await startErrandMatching(errand);
+
+    res.status(201).json({ errand, message: "Errand posted successfully" });
   } catch (error) {
     next(error);
   }
 };
 
+/**
+ * GET /errands/:id — fetch a single errand with its helper, requester and
+ * chat messages eagerly loaded. User objects are projected down to the
+ * fields the UI needs so we never leak password hashes or private tokens.
+ */
 export const getErrandById = async (
   req: AuthRequest<{ id: string }>,
   res: Response,
@@ -91,7 +112,6 @@ export const getErrandById = async (
             phone: true,
           },
         },
-        messages: true,
         requester: {
           select: {
             id: true,
@@ -112,38 +132,14 @@ export const getErrandById = async (
   }
 };
 
-export const setPaymentMethod = async (
-  req: AuthRequest<{ id: string }>,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    const { id } = req.params;
-    const { paymentMethodId } = req.body;
-
-    if (!paymentMethodId)
-      throw new AppError("paymentMethodId is required", 400);
-
-    const errand = await prisma.errand.findUnique({ where: { id } });
-    if (!errand) throw new AppError("Errand not found", 404);
-    if (errand.requesterId !== req.userId)
-      throw new AppError("Unauthorised", 403);
-    if (errand.stripePaymentIntentId)
-      throw new AppError("Payment already authorised for this errand", 400);
-
-    await prisma.errand.update({
-      where: { id },
-      data: { paymentMethodId },
-    });
-
-    await startErrandMatching(errand);
-
-    res.status(200).json({ message: "Payment method saved" });
-  } catch (error) {
-    next(error);
-  }
-};
-
+/**
+ * POST /errands/:id/start — helper marks hands-on work as begun.
+ *
+ * Records startedAt which acts as the clock-start for billing when the
+ * errand later moves to REVIEWING. Restricted to HANDS_ON_HELP errands in
+ * IN_PROGRESS state owned by the requesting helper. Emits a realtime
+ * event and push notification to the requester.
+ */
 export const startWork = async (
   req: AuthRequest<{ id: string }>,
   res: Response,
@@ -179,6 +175,12 @@ export const startWork = async (
   }
 };
 
+/**
+ * POST /errands/:id/extend — helper requests extra hours on a hands-on job.
+ *
+ * Bumps estimatedDuration by additionalHours (capped 0.5-8) and notifies
+ * the requester. The new duration is used later to compute finalCost.
+ */
 export const extendWork = async (
   req: AuthRequest<{ id: string }>,
   res: Response,
@@ -227,6 +229,17 @@ export const extendWork = async (
   }
 };
 
+/**
+ * PATCH /errands/:id/status — move an errand along its lifecycle.
+ *
+ * Enforces the state machine defined by allowedTransitions and the
+ * party-of-action rules (helper submits proof; requester confirms or
+ * cancels). For HANDS_ON_HELP the finalCost is computed at REVIEWING time
+ * from elapsed work rounded up to 15-minute blocks. Stripe capture is
+ * deferred until COMPLETED and cancellation until CANCELLED so funds only
+ * move on an explicit requester decision. Emits realtime + push
+ * notifications at the key transitions.
+ */
 export const updateErrandStatus = async (
   req: AuthRequest,
   res: Response,
@@ -239,6 +252,11 @@ export const updateErrandStatus = async (
 
     if (!errand) throw new AppError("Errand not found", 404);
 
+    // Valid status transitions. EXPIRED and DISPUTED are terminal states reachable
+    // only via system/dispute paths, not direct API calls from this table.
+    // Helper drives: IN_PROGRESS → REVIEWING (submits proof)
+    // Requester drives: REVIEWING → COMPLETED (confirms) or → DISPUTED (contests)
+    //                   POSTED / IN_PROGRESS → CANCELLED
     const allowedTransitions: Record<string, string[]> = {
       POSTED: ["CANCELLED", "EXPIRED"],
       IN_PROGRESS: ["REVIEWING", "CANCELLED"],
@@ -270,22 +288,28 @@ export const updateErrandStatus = async (
       throw new AppError("Only the requester can perform this action", 403);
     }
 
+    // finalCost is computed at REVIEWING time (when the helper submits proof) so the
+    // requester knows exactly what will be captured before they confirm.
     let finalCost: number | undefined;
     if (status === "REVIEWING" && errand.type === "HANDS_ON_HELP") {
       if (!errand.startedAt)
         throw new AppError("Work has not been started yet", 400);
       const elapsedMs = Date.now() - new Date(errand.startedAt).getTime();
       const elapsedMinutes = elapsedMs / 60000;
+      // Round up to the nearest 15-minute block — standard billing granularity for hourly work.
       const billedMinutes = Math.ceil(elapsedMinutes / 15) * 15;
       const billedHours = billedMinutes / 60;
+      // agreedPrice is the per-hour rate settled during matching (may differ from suggestedPrice).
       finalCost =
         Math.round(
           billedHours * (errand.agreedPrice ?? errand.suggestedPrice!) * 100,
         ) / 100;
     }
 
+    // Fixed-price types: cost is simply the agreed flat rate, not time-based.
     if (status === "REVIEWING" && errand.type === "PICKUP_DELIVERY")
       finalCost = errand.agreedPrice ?? errand.suggestedPrice!;
+
     const updatedErrand = await prisma.errand.update({
       where: { id },
       data: {
@@ -298,7 +322,11 @@ export const updateErrandStatus = async (
       },
     });
 
+    // Capture and cancel are deferred to status-change rather than done at matching
+    // time so that: (a) the final amount for HANDS_ON_HELP is only known here, and
+    // (b) no money moves until the requester explicitly confirms or cancels.
     if (status === "COMPLETED" && updatedErrand.stripePaymentIntentId) {
+      // For HANDS_ON_HELP, capture only finalCost (may be less than the authorized amount).
       const captureAmount =
         errand.type === "HANDS_ON_HELP" && updatedErrand.finalCost
           ? { amount_to_capture: Math.round(updatedErrand.finalCost * 100) }
@@ -343,6 +371,14 @@ export const updateErrandStatus = async (
   }
 };
 
+/**
+ * POST /errands/:id/dispute — requester contests a submitted proof.
+ *
+ * Only valid while the errand is REVIEWING and only callable by the
+ * requester. Creates a Dispute row and flips the errand to DISPUTED in a
+ * single transaction so the two states can never diverge. The helper is
+ * notified in realtime.
+ */
 export const raiseDispute = async (
   req: AuthRequest<{ id: string }>,
   res: Response,

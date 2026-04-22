@@ -1,11 +1,16 @@
 import { CreateErrandInput, ErrandStatus } from "@errandhub/shared";
+
+type CreateErrandPayload = CreateErrandInput & { paymentMethodId: string };
 import { api } from ".";
 import { TAGS } from "@/utils/constants";
 
+// Errand endpoints. Each mutation lists which cache tags it invalidates so
+// the requester/helper list screens refetch automatically when a status
+// changes or a new errand is posted.
 const errandApi = api.injectEndpoints({
   endpoints: (build) => ({
     createErrand: build.mutation({
-      query: (errandData: CreateErrandInput) => ({
+      query: (errandData: CreateErrandPayload) => ({
         url: `/errand/create`,
         method: "POST",
         body: errandData,
@@ -58,18 +63,7 @@ const errandApi = api.injectEndpoints({
       ],
     }),
 
-    setPaymentMethod: build.mutation<
-      { message: string },
-      { errandId: string; paymentMethodId: string }
-    >({
-      query: ({ errandId, paymentMethodId }) => ({
-        url: `/errand/${errandId}/payment-method`,
-        method: "PATCH",
-        body: { paymentMethodId },
-      }),
-    }),
-
-    startWork: build.mutation<{ errand: any }, string>({
+startWork: build.mutation<{ errand: any }, string>({
       query: (errandId) => ({
         url: `/errand/${errandId}/start`,
         method: "PATCH",
@@ -100,7 +94,6 @@ export const {
   useGetErrandByIdQuery,
   useUpdateErrandStatusMutation,
   useRaiseDisputeMutation,
-  useSetPaymentMethodMutation,
   useStartWorkMutation,
   useExtendWorkMutation,
 } = errandApi;

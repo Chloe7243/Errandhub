@@ -42,6 +42,10 @@ const SignUp = () => {
     resolver: zodResolver(signUpSchema),
   });
 
+  // Signup returns a token immediately, but the user has no role yet — the
+  // loginUser thunk still fires so they're "logged in" while the root
+  // layout detects the missing role and redirects them into the
+  // role-selection onboarding step.
   async function onSubmit(data: SignUpForm) {
     if (isLoading) return;
     try {

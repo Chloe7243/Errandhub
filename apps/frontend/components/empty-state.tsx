@@ -12,6 +12,13 @@ type Props = {
   containerStyle?: StyleProp<ViewStyle>;
 };
 
+/**
+ * Placeholder used inside lists and whole screens when there is no data or
+ * an error occurred. `variant="card"` renders a bordered container
+ * suitable for embedding in a list; `variant="default"` is unbordered for
+ * fullscreen usage. `isError` switches the icon to an alert and the text
+ * to the error colour.
+ */
 const EmptyState = ({
   message,
   icon = "information-circle-outline",

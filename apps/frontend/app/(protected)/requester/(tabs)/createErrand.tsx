@@ -3,15 +3,12 @@ import AddressPicker, {
 } from "@/components/ui/address-picker";
 import ChecklistInput from "@/components/ui/checklist-input";
 import Input from "@/components/ui/input";
-import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import { useCreateErrandMutation } from "@/store/api/errand";
-import { displayErrorMessage } from "@/utils/errors";
 import {
-  CreateErrandInput,
   createErrandSchema,
   ErrandType,
+  type CreateErrandInput,
 } from "@errandhub/shared";
 import { Ionicons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,8 +30,6 @@ const CreateErrand = () => {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
-  const [createErrand, { isLoading }] = useCreateErrandMutation();
-
   const prefill = useLocalSearchParams() as Partial<CreateErrandInput>;
   const [taskType, setTaskType] = useState<ErrandType>(
     prefill.type ?? "PICKUP_DELIVERY",
@@ -54,6 +49,8 @@ const CreateErrand = () => {
     defaultValues: { type: taskType },
   });
 
+  console.log({ errors });
+
   // Pre-fill the form when arriving from a repost
   useEffect(() => {
     setTaskType(prefill.type ?? "PICKUP_DELIVERY");
@@ -68,27 +65,24 @@ const CreateErrand = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const onSubmit = async (data: CreateErrandInput) => {
-    try {
-      const result = await createErrand({
-        ...data,
-        type: taskType,
-        finalLocation:
-          taskType === "HANDS_ON_HELP"
-            ? data.firstLocation
-            : data.finalLocation,
-        firstLat: pickupCoords?.lat,
-        firstLng: pickupCoords?.lng,
-        finalLat:
-          taskType === "HANDS_ON_HELP" ? pickupCoords?.lat : dropoffCoords?.lat,
-        finalLng:
-          taskType === "HANDS_ON_HELP" ? pickupCoords?.lng : dropoffCoords?.lng,
-      }).unwrap();
-      router.push(`/requester/payment?errandId=${result.errand.id}`);
-    } catch (err) {
-      console.error("Error creating errand:", err);
-      displayErrorMessage(err);
-    }
+  const onSubmit = (data: CreateErrandInput) => {
+    const pendingErrand = {
+      ...data,
+      type: taskType,
+      finalLocation:
+        taskType === "HANDS_ON_HELP" ? data.firstLocation : data.finalLocation,
+      firstLat: pickupCoords?.lat,
+      firstLng: pickupCoords?.lng,
+      finalLat:
+        taskType === "HANDS_ON_HELP" ? pickupCoords?.lat : dropoffCoords?.lat,
+      finalLng:
+        taskType === "HANDS_ON_HELP" ? pickupCoords?.lng : dropoffCoords?.lng,
+    };
+    console.log("Pending errand data: ", pendingErrand);
+    router.push({
+      pathname: "/requester/payment",
+      params: { errandData: JSON.stringify(pendingErrand) },
+    });
   };
 
   return (
@@ -167,8 +161,8 @@ const CreateErrand = () => {
               name="description"
               render={({ field: { value, onChange } }) => (
                 <ChecklistInput
-                  label="Description"
-                  placeholder="Enter Instruction"
+                  label="Instructions"
+                  placeholder="Enter Instruction and press enter"
                   value={value ?? ""}
                   onChange={onChange}
                   error={errors.description?.message}
@@ -278,18 +272,10 @@ const CreateErrand = () => {
 
         {/* Submit */}
         <TouchableOpacity
-          style={[
-            styles.button,
-            { backgroundColor: colors.primary, opacity: isLoading ? 0.7 : 1 },
-          ]}
+          style={[styles.button, { backgroundColor: colors.primary }]}
           onPress={handleSubmit(onSubmit)}
-          disabled={isLoading}
         >
-          {isLoading ? (
-            <LoadingSpinner size="small" color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Post Errand</Text>
-          )}
+          <Text style={styles.buttonText}>Continue to Payment</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

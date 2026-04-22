@@ -1,3 +1,6 @@
+// Root Redux store. Combines domain slices (auth, chat, matching, theme,
+// location, checklist) with the RTK Query `api` reducer/middleware which
+// handles all HTTP calls and cache invalidation via tag types.
 import { api } from "./api";
 import { configureStore } from "@reduxjs/toolkit";
 import authReducer from "./slices/auth-slice";

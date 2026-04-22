@@ -41,6 +41,12 @@ const authSlice = createSlice({
 
 export const { setCredentials, logout, updateUserState } = authSlice.actions;
 
+/**
+ * Thunk: persist login credentials to the OS keychain and dispatch
+ * setCredentials. deleteToken is awaited before saveToken so any stale
+ * token from a prior session can never linger alongside the new one.
+ * Payload: { user, token } obtained from the login/signup API call.
+ */
 export const loginUser = createAsyncThunk(
   "auth/login",
   async (credentials: { user: User; token: string }, { dispatch }) => {
@@ -50,6 +56,11 @@ export const loginUser = createAsyncThunk(
   },
 );
 
+/**
+ * Thunk: clear the keychain token and reset the auth slice. Dispatching
+ * the plain `logout` action alone would leave the token on disk and the
+ * next app launch would silently re-authenticate.
+ */
 export const logoutUser = createAsyncThunk(
   "auth/logout",
   async (_, { dispatch }) => {

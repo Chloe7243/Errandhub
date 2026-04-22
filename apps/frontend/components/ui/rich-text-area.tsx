@@ -15,6 +15,12 @@ type Props = {
   error?: string;
 };
 
+/**
+ * Rich text input built on react-native-pell-rich-editor with a minimal
+ * toolbar (bold, italic, bullet/ordered list). Emits the edited HTML as a
+ * string via onChange. Used for errand descriptions where basic formatting
+ * is helpful (numbered steps, emphasis) without needing a full editor.
+ */
 const RichTextInput = ({ label, placeholder, onChange, error }: Props) => {
   const richText = useRef<RichEditor>(null);
   const colorScheme = useColorScheme();

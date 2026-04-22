@@ -15,6 +15,14 @@ type CustomSizeProps = BaseProps & { customSize: number; size?: never };
 
 type Props = SizeProps | CustomSizeProps;
 
+/**
+ * Themed ActivityIndicator wrapper.
+ *
+ * Two sizing modes via a discriminated-union prop type: either the RN
+ * standard `size="small" | "large"`, or a numeric `customSize` scale
+ * multiplier (applied via transform so any value works). `fullScreen`
+ * centres the spinner inside a flex:1 container for loading screens.
+ */
 const LoadingSpinner = ({
   color,
   size,

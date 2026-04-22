@@ -24,6 +24,15 @@ import { useEffect } from "react";
 import { View } from "react-native";
 import Toast from "react-native-toast-message";
 
+// Top-level layout for every authenticated screen. This component is the
+// single place we wire up:
+//   - Expo push notifications (register + in-app deep-link on tap)
+//   - the global socket.io connection and every cross-cutting event
+//     (matching, chat, lifecycle transitions, disputes)
+//   - the two modals (dispatch request / counter offer) that can appear
+//     over any screen when the matching service targets this user
+// Doing it here means individual screens don't have to subscribe — they
+// just read the resulting redux state or navigate via router.push.
 export default function ProtectedLayout() {
   const router = useRouter();
   const dispatch = useAppDispatch();

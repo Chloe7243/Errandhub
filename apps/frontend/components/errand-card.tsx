@@ -19,6 +19,13 @@ type Props = {
   onPress?: () => void;
 };
 
+/**
+ * List-row card used by the requester's errands screen to summarise a
+ * single errand: type + status badges, title, pickup location, agreed or
+ * pending price, and either the assigned helper or a "waiting for
+ * helpers" state. Terminal unhappy-path states (CANCELLED, DISPUTED) get
+ * a tinted border so they read distinctly at a glance.
+ */
 const ErrandCard = ({
   type,
   status,
@@ -34,6 +41,8 @@ const ErrandCard = ({
   const colors = Colors[colorScheme ?? "dark"];
   const statusColor = STATUS_COLORS[status];
   const hasHelper = !!helperFirstName;
+  // Terminal unhappy-path states get a tinted border so they read as
+  // visually distinct from in-progress / completed cards at a glance.
   const isTerminal = status === "CANCELLED" || status === "DISPUTED";
 
   return (

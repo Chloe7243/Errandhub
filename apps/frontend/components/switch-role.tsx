@@ -11,6 +11,9 @@ import {
 } from "@/store/api/user";
 import { activeStatuses } from "@errandhub/shared";
 
+// Helpers can't have "POSTED" errands (that's a requester-only state), so
+// their active set is narrower than `activeStatuses`. Blocking role switch
+// while anything is active prevents ownership confusion mid-errand.
 const ACTIVE_HELPER_STATUSES = [
   "ACCEPTED",
   "IN_PROGRESS",

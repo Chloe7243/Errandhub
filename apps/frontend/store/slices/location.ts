@@ -4,6 +4,9 @@ export type LocationPermissionStatus = "unknown" | "granted" | "denied";
 
 type Coordinates = { lat: number; lng: number };
 
+// Tracks the device's location permission and last known coordinates so the
+// matching flow (helper availability + errand radius filter) can decide
+// whether to even attempt a location lookup without re-prompting the user.
 type LocationState = {
   permissionStatus: LocationPermissionStatus;
   coordinates: Coordinates | null;

@@ -11,6 +11,14 @@ import {
   View,
 } from "react-native";
 
+/**
+ * Shared themed text input used across every form.
+ *
+ * Adds: label rendering, inline error display with red border,
+ * optional leading icon, and a built-in show/hide eye toggle for
+ * secureTextEntry fields so screens don't need to manage that state. Also
+ * supports multiline, keyboard type, custom wrapper/input styles.
+ */
 const Input = ({
   label,
   placeholder,
@@ -28,6 +36,8 @@ const Input = ({
 }: InputProps) => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
+  // Tracks visibility of a secure input locally so the eye toggle works
+  // without the consumer needing to manage boolean state.
   const [hidden, setHidden] = useState(secureTextEntry);
 
   return (

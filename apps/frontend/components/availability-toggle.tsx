@@ -23,6 +23,17 @@ type Props = {
   onValueChange?: (val: boolean) => void;
 };
 
+/**
+ * Helper availability switch with a title/subtitle and a Switch.
+ *
+ * Two modes:
+ *   - uncontrolled (default): reads/writes the user-settings API directly,
+ *     so profile and home screens can drop it in without plumbing state.
+ *   - controlled (`controlled` prop true, with `value` + `onChange`): used
+ *     during onboarding before a settings row exists server-side.
+ * `onValueChange` fires after a successful server write in uncontrolled
+ * mode so the parent can refresh derived UI (e.g. home banners).
+ */
 const AvailabilityToggle = ({
   value,
   onChange,

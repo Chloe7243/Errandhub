@@ -1,5 +1,4 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-// components/chat-screen.tsx
 import Avatar from "@/components/avatar";
 import BackButton from "@/components/ui/back-button";
 import { Colors } from "@/constants/theme";
@@ -38,6 +37,16 @@ type ChatScreenProps = {
   otherPersonPhone?: string;
 };
 
+/**
+ * Shared chat UI used by both the requester and helper chat screens.
+ *
+ * Joins the errand-scoped socket.io room on mount, appends incoming
+ * messages into the redux chat slice (keyed by errandId), and sends outgoing
+ * messages over the same socket. Also renders a tap-to-call button when
+ * `otherPersonPhone` is provided. Props:
+ *   - errandId: scope for the chat room / redux messages bucket.
+ *   - otherPersonName / otherPersonPhone: header identity + call target.
+ */
 const ChatScreen = ({
   errandId,
   otherPersonName,
@@ -56,6 +65,10 @@ const ChatScreen = ({
 
   const [firstName, lastName] = otherPersonName.split(" ");
 
+  // Join the errand-scoped socket.io room on mount and tear down on unmount.
+  // The `mounted` flag guards against the late-resolving connectSocket
+  // promise dispatching into an already-unmounted screen. The short timeout
+  // before scrollToEnd gives FlatList a tick to commit the new row.
   useEffect(() => {
     let mounted = true;
     const handleReceiveMessage = (message: Message) => {

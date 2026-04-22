@@ -4,6 +4,12 @@ import { AppError } from "../middleware/errors";
 import { NextFunction, Response } from "express";
 import { ErrandStatus } from "@errandhub/shared";
 
+/**
+ * GET /users/me — return the authenticated user's public profile.
+ *
+ * Uses a select projection so sensitive columns (passwordHash, reset tokens,
+ * push tokens, Stripe ids) never leave the database layer.
+ */
 export const getUser = async (
   req: AuthRequest,
   res: Response,
@@ -33,6 +39,14 @@ export const getUser = async (
   }
 };
 
+/**
+ * GET /users/me/errands — requester-facing list of errands they've posted.
+ *
+ * Accepts an optional ?status=A,B filter (array or comma-separated) so the
+ * mobile tabs can narrow the list, but the summary totals are always
+ * computed over the full set so the tab badges stay stable regardless of
+ * which tab is active.
+ */
 export const getRequestedErrands = async (
   req: AuthRequest,
   res: Response,
@@ -40,6 +54,8 @@ export const getRequestedErrands = async (
 ) => {
   try {
     const { status } = req.query;
+    // Status can arrive either as repeated query params (array) or a single
+    // comma-separated string — normalise both into ErrandStatus[].
     const statuses = status
       ? ((Array.isArray(status)
           ? status
@@ -84,6 +100,13 @@ export const getRequestedErrands = async (
   }
 };
 
+/**
+ * GET /users/me/helped — helper-facing history of accepted errands.
+ *
+ * Summary only aggregates terminal states (COMPLETED / DISPUTED) because
+ * in-progress earnings are not yet realised and would mislead the
+ * "total earned" figure on the profile screen.
+ */
 export const getHelpedErrands = async (
   req: AuthRequest,
   res: Response,
@@ -139,6 +162,12 @@ export const getHelpedErrands = async (
   }
 };
 
+/**
+ * GET /users/me/settings — return the UserSettings row.
+ *
+ * Returns null when the row has not yet been created (first-run state); the
+ * client is responsible for rendering sensible defaults in that case.
+ */
 export const getSettings = async (
   req: AuthRequest,
   res: Response,
@@ -155,6 +184,12 @@ export const getSettings = async (
   }
 };
 
+/**
+ * POST /users/me/push-token — persist the Expo push token for this device.
+ *
+ * Called once after the user grants notification permissions; the token is
+ * later used by notifyUser to dispatch transactional push messages.
+ */
 export const savePushToken = async (
   req: AuthRequest,
   res: Response,
@@ -175,6 +210,12 @@ export const savePushToken = async (
   }
 };
 
+/**
+ * PATCH /users/me/avatar — update the stored avatar URL.
+ *
+ * The actual image upload goes to the object store directly from the
+ * client; only the resulting URL is passed here.
+ */
 export const updateAvatar = async (
   req: AuthRequest,
   res: Response,
@@ -196,6 +237,17 @@ export const updateAvatar = async (
   }
 };
 
+/**
+ * PATCH /users/me/settings — upsert per-user preferences.
+ *
+ * Upsert rather than update because the row is created lazily on first
+ * change; the create branch supplies documented defaults and the update
+ * branch only writes fields that were explicitly provided so the client
+ * can PATCH a single toggle without clobbering the rest.
+ *
+ * Accepted fields: isAvailable, notificationRadius (km), errandUpdates,
+ * newMessages, promotions.
+ */
 export const updateSettings = async (
   req: AuthRequest,
   res: Response,

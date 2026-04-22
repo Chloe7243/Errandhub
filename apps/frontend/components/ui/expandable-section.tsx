@@ -1,4 +1,3 @@
-// components/ExpandableSection.tsx
 import React from "react";
 import {
   StyleSheet,
@@ -21,6 +20,13 @@ type ExpandableSectionProps = {
   containerStyle?: ViewStyle;
 };
 
+/**
+ * Collapsible card row used on settings / errand-details screens to group
+ * related fields under an icon + label. Expansion state is hoisted to the
+ * parent (controlled via `expanded` / `onPress`) so multiple instances can
+ * share an accordion-style "one open at a time" behaviour when desired.
+ * Children render inside the panel below the header when expanded.
+ */
 const ExpandableSection = ({
   icon,
   label,

@@ -14,6 +14,17 @@ import {
 import { sendEmail } from "../lib/nodemailer";
 import { welcomeEmail, resetPasswordEmail } from "../emails";
 
+/**
+ * POST /auth/signup — create a new user account.
+ *
+ * Validates the signup payload with the shared Zod schema, rejects duplicate
+ * emails, bcrypt-hashes the password, creates the user plus a default
+ * UserSettings row, and returns a 7-day JWT. A welcome email is dispatched
+ * fire-and-forget so SMTP latency does not block the response.
+ *
+ * Note: the JWT minted here is role-less — the client must call
+ * selectRole() afterwards to obtain a role-scoped token.
+ */
 export const signUp = async (
   req: Request,
   res: Response,
@@ -32,7 +43,6 @@ export const signUp = async (
       throw new AppError("Email already in use", 400);
     }
 
-    const verificationToken = crypto.randomUUID();
     const passwordHash = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
@@ -57,13 +67,14 @@ export const signUp = async (
       expiresIn: "7d",
     });
 
+    // Fire-and-forget: we do not await sendEmail so a slow/failed SMTP call
+    // never blocks the signup response. Email delivery is non-critical here.
     sendEmail({
       to: user.email,
       subject: "Welcome to ErrandHub 🎉",
       html: welcomeEmail(firstName),
     });
 
-    // Create default settings for the new user
     await prisma.userSettings.create({
       data: { userId: userData.userId },
     });
@@ -77,6 +88,13 @@ export const signUp = async (
   }
 };
 
+/**
+ * POST /auth/login — exchange email + password for a JWT.
+ *
+ * Uses a constant-time bcrypt comparison and returns the same "Invalid
+ * credentials" error for both "no such user" and "wrong password" to avoid
+ * leaking which emails exist. Token lifetime is 7 days.
+ */
 export const login = async (
   req: Request,
   res: Response,
@@ -89,8 +107,6 @@ export const login = async (
     if (!parsed.success) {
       throw new AppError(parsed.error.errors[0].message, 400);
     }
-
-    console.log({ parsed });
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
@@ -110,8 +126,6 @@ export const login = async (
       avatarUrl: user.avatarUrl,
     };
 
-    console.log({ userData });
-
     const token = jwt.sign(userData, process.env.JWT_SECRET as string, {
       expiresIn: "7d",
     });
@@ -125,6 +139,14 @@ export const login = async (
   }
 };
 
+/**
+ * POST /auth/:userId/role — assign or switch the user's active role.
+ *
+ * Called immediately after signup, and again whenever the user toggles
+ * between helper and requester in-app. Mints a fresh JWT whose payload
+ * carries the chosen role so role guards can read it directly from the
+ * token without hitting the DB.
+ */
 export const selectRole = async (
   req: Request,
   res: Response,
@@ -168,6 +190,14 @@ export const selectRole = async (
   }
 };
 
+/**
+ * POST /auth/forget-password — kick off the password-reset flow.
+ *
+ * Generates a UUID reset token with a 10-minute expiry, persists it on the
+ * user, and fires off the reset email without awaiting delivery. The
+ * current implementation returns 404 for unknown emails; tightening this
+ * to a generic 200 would harden against user-enumeration attacks.
+ */
 export const forgetPassword = async (
   req: Request,
   res: Response,
@@ -188,6 +218,7 @@ export const forgetPassword = async (
     }
 
     const resetToken = crypto.randomUUID();
+    // 10-minute expiry balances security with the time it takes to open an email client.
     const resetTokenExpiry = new Date(Date.now() + 1000 * 60 * 10);
 
     await prisma.user.update({
@@ -195,6 +226,7 @@ export const forgetPassword = async (
       data: { resetToken, resetTokenExpiry },
     });
 
+    // Same fire-and-forget pattern as signup — SMTP latency must not stall the API response.
     sendEmail({
       to: user.email,
       subject: "Reset your ErrandHub password",
@@ -207,6 +239,12 @@ export const forgetPassword = async (
   }
 };
 
+/**
+ * POST /auth/reset-password — consume a reset token and set a new password.
+ *
+ * Looks up the user by an unexpired token, writes a fresh bcrypt hash, and
+ * nulls out the token fields so the same link cannot be reused.
+ */
 export const resetPassword = async (
   req: Request,
   res: Response,
@@ -230,6 +268,7 @@ export const resetPassword = async (
 
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Null out the token fields so the same link cannot be reused.
     await prisma.user.update({
       where: { id: user.id },
       data: {

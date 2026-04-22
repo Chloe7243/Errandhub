@@ -2,6 +2,11 @@ import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Image, StyleSheet, Text, View } from "react-native";
 
+/**
+ * Full-brand header shown on auth / splash screens: centred icon, app name
+ * and slogan. Colours come from the active theme so it adapts to dark mode
+ * without swapping the asset.
+ */
 const AppLogo = () => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
