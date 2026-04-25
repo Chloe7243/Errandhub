@@ -66,19 +66,32 @@ const HelperErrandDetails = () => {
   const isActive = errand?.status === "IN_PROGRESS";
   const isHandsOn = errand?.type === "HANDS_ON_HELP";
   const workStarted = !!errand?.startedAt;
+  // In REVIEWING the helper already ticked everything (enforced before upload).
+  // In COMPLETED the job is done. Both states should render the checklist as
+  // fully checked, even though clearProgress() wiped the Redux store on submit.
+  const isReviewingOrDone =
+    errand?.status === "REVIEWING" || errand?.status === "COMPLETED";
 
   const displayAmount = errand?.agreedPrice ?? errand?.suggestedPrice;
 
   const checklistItems = errand ? parseChecklist(errand.description) : [];
-  const checklistProgress = useAppSelector(
+  const storedProgress = useAppSelector(
     (state) => state.checklist.progress[id!] ?? [],
   );
+  // Use the stored booleans normally while the errand is live; once it has
+  // moved past IN_PROGRESS synthesise an all-true array so the UI reflects
+  // the completed state rather than the cleared store.
+  const checklistProgress = isReviewingOrDone
+    ? checklistItems.map(() => true)
+    : storedProgress;
 
   const checkedCount = checklistProgress.filter(Boolean).length;
   const allChecked =
     checklistItems.length === 0 || checkedCount === checklistItems.length;
-  // Checklist is interactive only once work has begun
-  const checklistLocked = isHandsOn ? !workStarted : !isActive;
+  // Checklist is interactive only once work has begun; lock it again once the
+  // errand is past IN_PROGRESS so the read-only checked state can't be toggled.
+  const checklistLocked =
+    isReviewingOrDone || (isHandsOn ? !workStarted : !isActive);
 
   const {
     firstLocation: firstLocationColor,
@@ -94,8 +107,6 @@ const HelperErrandDetails = () => {
       setLocation(loc);
     })();
   }, []);
-
-  console.log("Location:", { location });
 
   const handleMarkComplete = () => {
     if (isHandsOn && !workStarted) {
@@ -187,8 +198,6 @@ const HelperErrandDetails = () => {
         : `geo:${lat},${lng}?q=${lat},${lng}`;
     Linking.openURL(url);
   };
-
-  console.log({ errand });
 
   if (isLoading) return <LoadingSpinner fullScreen />;
   if (isError || !errand)
@@ -326,8 +335,8 @@ const HelperErrandDetails = () => {
                 {errand.title}
               </Text>
               {errand.isFavour ? (
-                <Text style={[styles.taskPrice, { color: colors.success }]}>
-                  Favour 🤝
+                <Text style={[styles.taskPrice, { color: colors.success, fontSize: 13 }]}>
+                  Favour
                 </Text>
               ) : (
                 <Text style={[styles.taskPrice, { color: colors.primary }]}>
@@ -433,8 +442,9 @@ const HelperErrandDetails = () => {
               )}
             </View>
 
-            {/* Locked notice — only shown when errand is active but work hasn't started yet */}
-            {checklistItems.length > 0 && checklistLocked && isActive && (
+            {/* Locked notice — shown when active but work hasn't started yet.
+                Not shown in REVIEWING/COMPLETED: the checked state speaks for itself. */}
+            {checklistItems.length > 0 && checklistLocked && isActive && !isReviewingOrDone && (
               <View
                 style={[
                   styles.checklistLockBanner,

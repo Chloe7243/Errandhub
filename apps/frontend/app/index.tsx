@@ -1,7 +1,7 @@
 import AppLogo from "@/components/app-logo";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
-import FontAwesome from "@expo/vector-icons/FontAwesome";
+// import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useRouter } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -52,7 +52,7 @@ const HomeScreen = () => {
           </Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.divider}>
+      {/* <View style={styles.divider}>
         <View style={[styles.line, { backgroundColor: colors.border }]} />
         <Text
           style={{
@@ -64,18 +64,18 @@ const HomeScreen = () => {
           or continue with
         </Text>
         <View style={[styles.line, { backgroundColor: colors.border }]} />
-      </View>
+      </View> */}
 
       <View style={[styles.buttonsContainer, { flexDirection: "row" }]}>
         {/* Google Sign In Button */}
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={[styles.thirdPartyButton, { borderColor: colors.border }]}
         >
           <FontAwesome name="google" size={24} color={colors.text} />
           <Text style={[styles.buttonText, { color: colors.text }]}>
             Google
           </Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         {/* Apple Sign in Button */}
         {/* <TouchableOpacity
           style={[styles.thirdPartyButton, { borderColor: colors.border }]}
@@ -85,17 +85,6 @@ const HomeScreen = () => {
           <Text style={[styles.buttonText, { color: colors.text }]}>Apple</Text>
         </TouchableOpacity> */}
       </View>
-      <Text
-        style={{
-          width: "90%",
-          color: colors.textTertiary,
-          fontSize: 12,
-          marginTop: 16,
-          textAlign: "center",
-        }}
-      >
-        By continuing, you agree to our Terms of Service and Privacy Policy.
-      </Text>
     </SafeAreaView>
   );
 };

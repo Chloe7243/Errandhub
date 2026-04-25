@@ -31,7 +31,6 @@ export const sendEmail = async (mailOptions: nodemailer.SendMailOptions) => {
         if (error) {
           reject(new AppError("Failed to send email", 400));
         } else {
-          console.log("Email sent: ", info.response);
           resolve(info);
         }
       },

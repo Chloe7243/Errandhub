@@ -24,15 +24,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Toast from "react-native-toast-message";
 
 const CreateErrand = () => {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const prefill = useLocalSearchParams() as Partial<CreateErrandInput>;
-  const [taskType, setTaskType] = useState<ErrandType>(
-    prefill.type ?? "PICKUP_DELIVERY",
+  const [taskType, setTaskType] = useState<ErrandType | null>(
+    prefill.type ?? null,
   );
   const [pickupCoords, setPickupCoords] = useState<LocationCoords | null>(null);
   const [dropoffCoords, setDropoffCoords] = useState<LocationCoords | null>(
@@ -43,42 +42,43 @@ const CreateErrand = () => {
     control,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<CreateErrandInput>({
     resolver: zodResolver(createErrandSchema),
-    defaultValues: { type: taskType },
   });
 
-  console.log({ errors });
-
-  // Pre-fill the form when arriving from a repost
+  // Pre-fill the form when arriving from a repost.
+  // When there is no prefill type the field is left undefined so the user
+  // must make an explicit selection — Zod will reject the form otherwise.
   useEffect(() => {
-    setTaskType(prefill.type ?? "PICKUP_DELIVERY");
+    const type = prefill.type ?? null;
+    setTaskType(type);
     reset({
       title: prefill.title ?? "",
       description: prefill.description ?? "",
       firstLocation: prefill.firstLocation ?? "",
       finalLocation: prefill.finalLocation ?? "",
       locationReference: prefill.locationReference ?? "",
-      type: prefill.type ?? "PICKUP_DELIVERY",
+      // Only include type when repasting — keeps the field undefined for a
+      // fresh form so Zod's required check fires if the user skips it.
+      ...(type ? { type } : {}),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onSubmit = (data: CreateErrandInput) => {
+    // data.type comes from setValue() so it is always the user's actual
+    // selection — no need to override with the local taskType mirror.
+    const isHandsOn = data.type === "HANDS_ON_HELP";
     const pendingErrand = {
       ...data,
-      type: taskType,
-      finalLocation:
-        taskType === "HANDS_ON_HELP" ? data.firstLocation : data.finalLocation,
+      finalLocation: isHandsOn ? data.firstLocation : data.finalLocation,
       firstLat: pickupCoords?.lat,
       firstLng: pickupCoords?.lng,
-      finalLat:
-        taskType === "HANDS_ON_HELP" ? pickupCoords?.lat : dropoffCoords?.lat,
-      finalLng:
-        taskType === "HANDS_ON_HELP" ? pickupCoords?.lng : dropoffCoords?.lng,
+      finalLat: isHandsOn ? pickupCoords?.lat : dropoffCoords?.lat,
+      finalLng: isHandsOn ? pickupCoords?.lng : dropoffCoords?.lng,
     };
-    console.log("Pending errand data: ", pendingErrand);
     router.push({
       pathname: "/requester/payment",
       params: { errandData: JSON.stringify(pendingErrand) },
@@ -103,36 +103,43 @@ const CreateErrand = () => {
               What kind of task?
             </Text>
             <View style={styles.radioGroup}>
-              {(["PICKUP_DELIVERY", "HANDS_ON_HELP"] as ErrandType[]).map(
-                (type) => (
-                  <Pressable
-                    key={type}
-                    style={styles.radioRow}
-                    onPress={() => setTaskType(type)}
-                  >
-                    <View
-                      style={[styles.radio, { borderColor: colors.primary }]}
-                    >
-                      {taskType === type && (
-                        <View
-                          style={[
-                            styles.radioDot,
-                            { backgroundColor: colors.primary },
-                          ]}
-                        />
-                      )}
-                    </View>
-                    <Text style={[styles.radioText, { color: colors.text }]}>
-                      {type === "SHOPPING"
-                        ? "Shopping (I need items bought)"
-                        : type === "HANDS_ON_HELP"
-                          ? "Hands-On Help (e.g. moving stuff, setting up, cleaning)"
-                          : "Pickup / Delivery (no purchase)"}
-                    </Text>
-                  </Pressable>
-                ),
-              )}
+              {(
+                ["PICKUP_DELIVERY", "SHOPPING", "HANDS_ON_HELP"] as ErrandType[]
+              ).map((type) => (
+                <Pressable
+                  key={type}
+                  style={styles.radioRow}
+                  onPress={() => {
+                    setTaskType(type);
+                    // Sync the selection into RHF so Zod sees the value.
+                    setValue("type", type, { shouldValidate: true });
+                  }}
+                >
+                  <View style={[styles.radio, { borderColor: colors.primary }]}>
+                    {taskType === type && (
+                      <View
+                        style={[
+                          styles.radioDot,
+                          { backgroundColor: colors.primary },
+                        ]}
+                      />
+                    )}
+                  </View>
+                  <Text style={[styles.radioText, { color: colors.text }]}>
+                    {type === "SHOPPING"
+                      ? "Shopping (I need items bought)"
+                      : type === "HANDS_ON_HELP"
+                        ? "Hands-On Help (e.g. moving stuff, setting up, cleaning)"
+                        : "Pickup / Delivery (no purchase)"}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
+            {errors.type && (
+              <Text style={{ color: "red", fontSize: 12 }}>
+                {errors.type.message ?? "Please select a task type"}
+              </Text>
+            )}
           </View>
 
           {/* Shared Fields */}
@@ -193,7 +200,7 @@ const CreateErrand = () => {
               )}
             />
 
-            {taskType !== "HANDS_ON_HELP" && (
+            {(taskType === "PICKUP_DELIVERY" || taskType === "SHOPPING") && (
               <>
                 <Controller
                   control={control}
@@ -265,7 +272,9 @@ const CreateErrand = () => {
             <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
               {taskType === "HANDS_ON_HELP"
                 ? "A suggested hourly rate will be shown. Helpers can negotiate the rate before you confirm."
-                : "A suggested price will be calculated based on distance. Helpers can make a counter-offer before you confirm."}
+                : taskType === null
+                  ? "Select a task type above to see pricing info."
+                  : "A suggested price will be calculated based on distance. Helpers can make a counter-offer before you confirm."}
             </Text>
           </View>
         </View>

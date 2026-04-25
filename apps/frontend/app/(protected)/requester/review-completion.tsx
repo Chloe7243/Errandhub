@@ -282,7 +282,7 @@ const ReviewCompletion = () => {
                 const h = Math.floor(billedMins / 60);
                 const m = billedMins % 60;
                 const timeStr =
-                  h > 0 ? `${h}h ${m > 0 ? `${m}m` : ""}`.trim() : `${m}m`;
+                  h > 0 ? `${h}h ${m > 0 ? `${m}m` : ""}`.trim() : `${0}m`;
                 return (
                   <>
                     <View style={styles.checkRow}>

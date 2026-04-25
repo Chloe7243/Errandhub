@@ -2,10 +2,6 @@
 import { LogBox } from "react-native";
 import { store } from "@/store";
 import { User } from "@/types/user";
-
-// Suppress the dev-mode error/warning overlay so it doesn't confuse testers.
-// Errors are still logged to the console for debugging.
-LogBox.ignoreAllLogs();
 import { jwtDecode } from "jwt-decode";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -19,11 +15,26 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import "react-native-reanimated";
 import { Provider } from "react-redux";
-import Toast from "react-native-toast-message";
+import Toast, {
+  ErrorToast,
+  SuccessToast,
+  BaseToast,
+} from "react-native-toast-message";
 import { getToken, getValue } from "@/utils/secure-store";
 import { AuthState, loginUser } from "@/store/slices";
 import { setThemePreference, ThemePreference } from "@/store/slices/theme";
 import { StripeProvider } from "@stripe/stripe-react-native";
+import * as Network from "expo-network";
+
+const toastConfig = {
+  success: (props: any) => <SuccessToast {...props} text1NumberOfLines={0} />,
+  error: (props: any) => <ErrorToast {...props} text1NumberOfLines={0} />,
+  info: (props: any) => <BaseToast {...props} text1NumberOfLines={0} />,
+};
+
+// Suppress the dev-mode error/warning overlay so it doesn't confuse testers.
+// Errors are still logged to the console for debugging.
+LogBox.ignoreAllLogs();
 
 const THEME_KEY = "theme_preference";
 
@@ -49,6 +60,20 @@ function RootLayoutNav() {
   const { isAuthenticated, user } = useAppSelector(
     (state) => state.auth,
   ) as AuthState;
+
+  useEffect(() => {
+    (async () => {
+      const state = await Network.getNetworkStateAsync();
+      if (!state.isConnected || !state.isInternetReachable) {
+        Toast.show({
+          type: "error",
+          text1: "You are currently offline",
+          autoHide: false,
+          swipeable: true,
+        });
+      }
+    })();
+  });
 
   useEffect(() => {
     async function prepare() {
@@ -102,7 +127,7 @@ function RootLayoutNav() {
           <Stack.Screen name="(protected)" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
-        <Toast />
+        <Toast config={toastConfig} />
       </ThemeProvider>
     </StripeProvider>
   );

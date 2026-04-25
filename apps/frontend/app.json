@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "errandhub",
-    "slug": "errandhub",
+    "slug": "Errandhub",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -11,9 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": [
-          "remote-notification"
-        ]
+        "UIBackgroundModes": ["remote-notification"]
       }
     },
     "android": {
@@ -58,8 +56,10 @@
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
+          "color ": "#000000",
           "dark": {
-            "backgroundColor": "#13111C"
+            "backgroundColor": "#13111C",
+            "color": "#1A6DC0"
           }
         }
       ],

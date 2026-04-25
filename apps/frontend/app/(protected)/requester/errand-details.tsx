@@ -143,8 +143,8 @@ const ErrandDetails = () => {
                   {formatErrandType(errand.type)}
                 </Text>
                 {errand.isFavour ? (
-                  <Text style={[styles.amount, { color: colors.success }]}>
-                    Favour 🤝
+                  <Text style={[styles.amount, { color: colors.success, fontSize: 13 }]}>
+                    Favour
                   </Text>
                 ) : (
                   displayAmount != null && (
@@ -349,8 +349,8 @@ const ErrandDetails = () => {
                     {errand.isFavour ? "Payment" : "Amount Paid"}
                   </Text>
                   {errand.isFavour ? (
-                    <Text style={[styles.amount, { color: colors.success }]}>
-                      Favour 🤝
+                    <Text style={[styles.amount, { color: colors.success, fontSize: 13 }]}>
+                      Favour
                     </Text>
                   ) : (
                     <Text style={[styles.amount, { color: colors.primary }]}>

@@ -557,4 +557,136 @@ describe("confirmHelper", () => {
       }),
     );
   });
+
+  it("sets agreedPrice to 0 and isFavour to true when it is a favour", async () => {
+    const errandId = nextErrandId();
+    const errand = setupSchedulerMocks(errandId);
+    await startErrandMatching({
+      id: errandId,
+      requesterId: REQUESTER_ID,
+      status: "POSTED",
+    });
+    jest.clearAllMocks();
+
+    const updated = { ...errand, helperId: HELPER_ID, status: "IN_PROGRESS", agreedPrice: 0, isFavour: true };
+    mockPrismaErrand.findUnique.mockResolvedValue(errand as any);
+    mockPrismaErrand.update.mockResolvedValue(updated as any);
+    mockPrismaUser.findUnique.mockResolvedValue({ firstName: "Bob" } as any);
+
+    await confirmHelper(errandId, undefined, true);
+
+    expect(mockPrismaErrand.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ agreedPrice: 0, isFavour: true }),
+      }),
+    );
+  });
+
+  it("skips payment authorisation entirely when it is a favour", async () => {
+    const errandId = nextErrandId();
+    const errand = setupSchedulerMocks(errandId);
+    await startErrandMatching({
+      id: errandId,
+      requesterId: REQUESTER_ID,
+      status: "POSTED",
+    });
+    jest.clearAllMocks();
+
+    const updated = { ...errand, helperId: HELPER_ID, status: "IN_PROGRESS", agreedPrice: 0, isFavour: true };
+    mockPrismaErrand.findUnique.mockResolvedValue(errand as any);
+    mockPrismaErrand.update.mockResolvedValue(updated as any);
+    mockPrismaUser.findUnique.mockResolvedValue({ firstName: "Bob" } as any);
+
+    await confirmHelper(errandId, undefined, true);
+
+    expect(mockAuthorize).not.toHaveBeenCalled();
+  });
+
+  it("sends the favour notification to the requester instead of the normal one", async () => {
+    const errandId = nextErrandId();
+    const errand = setupSchedulerMocks(errandId);
+    await startErrandMatching({
+      id: errandId,
+      requesterId: REQUESTER_ID,
+      status: "POSTED",
+    });
+    jest.clearAllMocks();
+
+    const updated = { ...errand, helperId: HELPER_ID, status: "IN_PROGRESS", agreedPrice: 0, isFavour: true };
+    mockPrismaErrand.findUnique.mockResolvedValue(errand as any);
+    mockPrismaErrand.update.mockResolvedValue(updated as any);
+    mockPrismaUser.findUnique.mockResolvedValue({ firstName: "Bob" } as any);
+
+    await confirmHelper(errandId, undefined, true);
+
+    expect(mockNotify).toHaveBeenCalledWith(
+      REQUESTER_ID,
+      expect.objectContaining({ title: "You're in luck! 🤝" }),
+    );
+    // The standard "Helper found!" notification must not fire alongside it.
+    expect(mockNotify).not.toHaveBeenCalledWith(
+      REQUESTER_ID,
+      expect.objectContaining({ title: "Helper found! 🎉" }),
+    );
+  });
+
+  it("includes isFavour in the errand_assigned event emitted to both parties", async () => {
+    const errandId = nextErrandId();
+    const errand = setupSchedulerMocks(errandId);
+    await startErrandMatching({
+      id: errandId,
+      requesterId: REQUESTER_ID,
+      status: "POSTED",
+    });
+    jest.clearAllMocks();
+
+    const updated = { ...errand, helperId: HELPER_ID, status: "IN_PROGRESS", agreedPrice: 0, isFavour: true };
+    mockPrismaErrand.findUnique.mockResolvedValue(errand as any);
+    mockPrismaErrand.update.mockResolvedValue(updated as any);
+    mockPrismaUser.findUnique.mockResolvedValue({ firstName: "Bob" } as any);
+
+    await confirmHelper(errandId, undefined, true);
+
+    expect(mockEmit).toHaveBeenCalledWith(
+      HELPER_ID,
+      "errand_assigned",
+      expect.objectContaining({ isFavour: true }),
+    );
+    expect(mockEmit).toHaveBeenCalledWith(
+      REQUESTER_ID,
+      "errand_assigned",
+      expect.objectContaining({ isFavour: true }),
+    );
+  });
+});
+
+// ─── helperAcceptErrand (favour path) ─────────────────────────────────────
+
+describe("helperAcceptErrand — favour", () => {
+  it("passes isFavour: true through to confirmHelper when the helper does it as a favour", async () => {
+    const errandId = nextErrandId();
+    const errand = setupSchedulerMocks(errandId);
+    await startErrandMatching({
+      id: errandId,
+      requesterId: REQUESTER_ID,
+      status: "POSTED",
+    });
+    jest.clearAllMocks();
+
+    const updated = { ...errand, helperId: HELPER_ID, status: "IN_PROGRESS", agreedPrice: 0, isFavour: true };
+    mockPrismaErrand.findUnique.mockResolvedValue(errand as any);
+    mockPrismaErrand.update.mockResolvedValue(updated as any);
+    mockPrismaUser.findUnique.mockResolvedValue({ firstName: "Bob" } as any);
+
+    await helperAcceptErrand(errandId, HELPER_ID, true);
+
+    // The errand should be stored with agreedPrice: 0 and isFavour: true.
+    expect(mockPrismaErrand.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ agreedPrice: 0, isFavour: true }),
+      }),
+    );
+    // No charge → no payment auth.
+    expect(mockAuthorize).not.toHaveBeenCalled();
+  });
 });

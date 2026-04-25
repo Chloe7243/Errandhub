@@ -133,6 +133,39 @@ const HelperHome = () => {
     );
   }
 
+  // Requesters need to trust the person handling their errands — a profile
+  // photo is the minimum signal of identity before entering the matching pool.
+  if (!user?.avatarUrl) {
+    return (
+      <SafeAreaView
+        style={[
+          styles.container,
+          styles.blockedContainer,
+          { backgroundColor: colors.background },
+        ]}
+      >
+        <Ionicons
+          name="person-circle-outline"
+          size={56}
+          color={colors.textTertiary}
+        />
+        <Text style={[styles.blockedTitle, { color: colors.text }]}>
+          Profile Photo Required
+        </Text>
+        <Text style={[styles.blockedBody, { color: colors.textSecondary }]}>
+          Requesters need to know who is handling their errands. Add a profile
+          photo before you start receiving dispatch requests.
+        </Text>
+        <TouchableOpacity
+          style={[styles.settingsButton, { backgroundColor: colors.primary }]}
+          onPress={() => router.navigate("/(protected)/helper/(tabs)/profile")}
+        >
+          <Text style={styles.settingsButtonText}>Add Photo</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView
       style={[styles.container, { backgroundColor: colors.background }]}

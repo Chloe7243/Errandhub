@@ -204,7 +204,7 @@ const DispatchRequestModal = ({
                 onPress={onFavour}
               >
                 <Text style={[styles.modalButtonText, { color: "#fff" }]}>
-                  Do as Favour 🤝
+                  Do as Favour
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity

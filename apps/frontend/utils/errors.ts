@@ -1,4 +1,5 @@
 import Toast from "react-native-toast-message";
+import * as Network from "expo-network";
 
 const DEFAULT_MSG = "Something went wrong, please try again!";
 
@@ -11,14 +12,25 @@ const DEFAULT_MSG = "Something went wrong, please try again!";
  * error isn't collapsed into one opaque toast. Falls back to a generic
  * default when nothing useful is present.
  */
-export const displayErrorMessage = (err: any) => {
-  // FETCH_ERROR means the device couldn't reach the server at all — no point
-  // showing the generic fallback when we know exactly what happened.
+export const displayErrorMessage = async (err: any) => {
+  // FETCH_ERROR covers no connection, server down, DNS failure, and timeouts.
+  // Check actual device connectivity before deciding which message to show.
+
   if (err?.status === "FETCH_ERROR") {
-    Toast.show({
-      type: "error",
-      text1: "No internet connection, please check your connection and try again.",
-    });
+    const state = await Network.getNetworkStateAsync();
+    if (!state.isConnected || !state.isInternetReachable) {
+      Toast.show({
+        type: "error",
+        text1: "No internet connection",
+        text2: "Please check your connection and try again.",
+      });
+    } else {
+      // Device is online but the server couldn't be reached — likely down or unreachable.
+      Toast.show({
+        type: "error",
+        text1: "Could not reach the server, please try again later.",
+      });
+    }
     return;
   }
 
