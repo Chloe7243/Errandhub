@@ -12,6 +12,16 @@ const DEFAULT_MSG = "Something went wrong, please try again!";
  * default when nothing useful is present.
  */
 export const displayErrorMessage = (err: any) => {
+  // FETCH_ERROR means the device couldn't reach the server at all — no point
+  // showing the generic fallback when we know exactly what happened.
+  if (err?.status === "FETCH_ERROR") {
+    Toast.show({
+      type: "error",
+      text1: "No internet connection, please check your connection and try again.",
+    });
+    return;
+  }
+
   if (Array.isArray(err?.data?.message)) {
     err.data.message.forEach((msg: string) =>
       Toast.show({

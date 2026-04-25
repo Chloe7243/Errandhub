@@ -325,10 +325,16 @@ const HelperErrandDetails = () => {
               >
                 {errand.title}
               </Text>
-              <Text style={[styles.taskPrice, { color: colors.primary }]}>
-                £{displayAmount?.toFixed(2) ?? "—"}
-                {isHandsOn ? "/hr" : ""}
-              </Text>
+              {errand.isFavour ? (
+                <Text style={[styles.taskPrice, { color: colors.success }]}>
+                  Favour 🤝
+                </Text>
+              ) : (
+                <Text style={[styles.taskPrice, { color: colors.primary }]}>
+                  £{displayAmount?.toFixed(2) ?? "—"}
+                  {isHandsOn ? "/hr" : ""}
+                </Text>
+              )}
             </View>
 
             <View style={styles.metaRow}>

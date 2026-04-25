@@ -16,6 +16,7 @@ type Props = {
   onAccept: () => void;
   onDecline: () => void;
   onCounterOffer: (amount: number) => void;
+  onFavour: () => void;
 };
 
 /**
@@ -33,6 +34,7 @@ const DispatchRequestModal = ({
   onAccept,
   onDecline,
   onCounterOffer,
+  onFavour,
 }: Props) => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
@@ -190,6 +192,19 @@ const DispatchRequestModal = ({
               >
                 <Text style={[styles.modalButtonText, { color: colors.text }]}>
                   Negotiate
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: colors.success + "CC" },
+                ]}
+                onPress={onFavour}
+              >
+                <Text style={[styles.modalButtonText, { color: "#fff" }]}>
+                  Do as Favour 🤝
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity

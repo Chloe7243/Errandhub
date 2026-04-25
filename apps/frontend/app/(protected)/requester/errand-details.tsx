@@ -142,11 +142,17 @@ const ErrandDetails = () => {
                 >
                   {formatErrandType(errand.type)}
                 </Text>
-                {displayAmount != null && (
-                  <Text style={[styles.amount, { color: colors.primary }]}>
-                    £{displayAmount.toFixed(2)}
-                    {errand.type === "HANDS_ON_HELP" ? "/hr" : ""}
+                {errand.isFavour ? (
+                  <Text style={[styles.amount, { color: colors.success }]}>
+                    Favour 🤝
                   </Text>
+                ) : (
+                  displayAmount != null && (
+                    <Text style={[styles.amount, { color: colors.primary }]}>
+                      £{displayAmount.toFixed(2)}
+                      {errand.type === "HANDS_ON_HELP" ? "/hr" : ""}
+                    </Text>
+                  )
                 )}
               </View>
               <Text style={[styles.title, { color: colors.text }]}>
@@ -340,16 +346,22 @@ const ErrandDetails = () => {
               >
                 <View style={styles.cardRow}>
                   <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    Amount Paid
+                    {errand.isFavour ? "Payment" : "Amount Paid"}
                   </Text>
-                  <Text style={[styles.amount, { color: colors.primary }]}>
-                    £
-                    {(errand.type === "HANDS_ON_HELP" &&
-                    errand.finalCost != null
-                      ? errand.finalCost
-                      : displayAmount
-                    )?.toFixed(2) ?? "—"}
-                  </Text>
+                  {errand.isFavour ? (
+                    <Text style={[styles.amount, { color: colors.success }]}>
+                      Favour 🤝
+                    </Text>
+                  ) : (
+                    <Text style={[styles.amount, { color: colors.primary }]}>
+                      £
+                      {(errand.type === "HANDS_ON_HELP" &&
+                      errand.finalCost != null
+                        ? errand.finalCost
+                        : displayAmount
+                      )?.toFixed(2) ?? "—"}
+                    </Text>
+                  )}
                 </View>
                 {errand.completedAt && (
                   <View style={styles.cardRow}>
@@ -483,6 +495,7 @@ const ErrandDetails = () => {
       {/* Emergency FAB — only when active */}
       {isActive && (
         <TouchableOpacity
+          onPress={() => router.push("/requester/emergency")}
           style={[styles.fab, { backgroundColor: colors.error }]}
         >
           <Ionicons name="warning-outline" size={22} color="#fff" />

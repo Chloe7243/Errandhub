@@ -41,7 +41,6 @@ type Settings = {
   notificationRadius: RadiusOption;
   errandUpdates: boolean;
   newMessages: boolean;
-  promotions: boolean;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -49,7 +48,6 @@ const DEFAULT_SETTINGS: Settings = {
   notificationRadius: 2,
   errandUpdates: true,
   newMessages: true,
-  promotions: false,
 };
 
 const HelperSettings = () => {
@@ -134,7 +132,6 @@ const HelperSettings = () => {
           .notificationRadius as RadiusOption,
         errandUpdates: settingsData.settings.errandUpdates,
         newMessages: settingsData.settings.newMessages,
-        promotions: settingsData.settings.promotions,
       };
       setSavedSettings(loaded);
       setCurrentSettings(loaded);
@@ -377,11 +374,6 @@ const HelperSettings = () => {
                   key: "newMessages",
                   label: "New messages",
                   sub: "Get notified when you receive a message",
-                },
-                {
-                  key: "promotions",
-                  label: "Promotions",
-                  sub: "Offers and platform updates",
                 },
               ].map((item) => (
                 <View

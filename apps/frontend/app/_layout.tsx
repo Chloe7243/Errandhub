@@ -1,6 +1,11 @@
 /* eslint-disable react-hooks/exhaustive-deps */
+import { LogBox } from "react-native";
 import { store } from "@/store";
 import { User } from "@/types/user";
+
+// Suppress the dev-mode error/warning overlay so it doesn't confuse testers.
+// Errors are still logged to the console for debugging.
+LogBox.ignoreAllLogs();
 import { jwtDecode } from "jwt-decode";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";

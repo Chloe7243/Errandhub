@@ -271,6 +271,7 @@ export const startErrandMatching = async (
 export const helperAcceptErrand = async (
   errandId: string,
   helperId: string,
+  isFavour: boolean = false,
 ) => {
   const state = matchingState.get(errandId);
   if (!state || state.currentHelperId !== helperId) return;
@@ -279,7 +280,7 @@ export const helperAcceptErrand = async (
   if (!errand || errand.status !== "POSTED") return;
 
   clearTimers(state);
-  confirmHelper(errandId);
+  confirmHelper(errandId, undefined, isFavour);
 };
 
 /**
@@ -416,7 +417,11 @@ export const helperDeclineErrand = async (
  * matching state. `amount` is optional and only set when assignment follows
  * an accepted counter-offer.
  */
-export const confirmHelper = async (errandId: string, amount?: number) => {
+export const confirmHelper = async (
+  errandId: string,
+  amount?: number,
+  isFavour: boolean = false,
+) => {
   const state = matchingState.get(errandId);
 
   if (!state || !state.currentHelperId) return;
@@ -432,31 +437,48 @@ export const confirmHelper = async (errandId: string, amount?: number) => {
     where: { id: errandId },
     data: {
       helperId: state.currentHelperId,
-      agreedPrice: amount ?? errand.suggestedPrice,
+      agreedPrice: isFavour ? 0 : (amount ?? errand.suggestedPrice),
+      isFavour,
       status: "IN_PROGRESS",
     },
   });
 
-  // Authorization is best-effort here — a failure should not block assignment.
-  // The payment intent is captured (or cancelled) later when the errand status changes.
-  try {
-    await authorizeErrandPayment(updated);
-  } catch (err) {
-    console.error("Payment authorization failed in matching:", err);
+  if (!isFavour) {
+    // Authorization is best-effort here — a failure should not block assignment.
+    // The payment intent is captured (or cancelled) later when the errand status changes.
+    try {
+      await authorizeErrandPayment(updated);
+    } catch (err) {
+      console.error("Payment authorization failed in matching:", err);
+    }
   }
 
   emitToUser(state.currentHelperId, "errand_assigned", {
     errandId: updated.id,
+    isFavour,
   });
   emitToUser(state.requesterId, "errand_assigned", {
     errandId: updated.id,
+    isFavour,
   });
 
-  await notifyUser(state.requesterId, {
-    title: "Helper found! 🎉",
-    body: `A helper has accepted your errand: ${errand.title}`,
-    data: { errandId },
-  });
+  if (isFavour) {
+    const helper = await prisma.user.findUnique({
+      where: { id: state.currentHelperId },
+      select: { firstName: true },
+    });
+    await notifyUser(state.requesterId, {
+      title: "You're in luck! 🤝",
+      body: `${helper?.firstName ?? "A helper"} is doing your errand as a favour — no charge!`,
+      data: { errandId },
+    });
+  } else {
+    await notifyUser(state.requesterId, {
+      title: "Helper found! 🎉",
+      body: `A helper has accepted your errand: ${errand.title}`,
+      data: { errandId },
+    });
+  }
 
   cleanupMatchingState(errandId);
 };

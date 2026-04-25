@@ -68,6 +68,13 @@ export default function ProtectedLayout() {
     dispatch(clearHelperRequest());
   };
 
+  const handleFavour = () => {
+    const socket = getSocket();
+    if (!helperRequest || !socket) return;
+    socket.emit("accept_errand", { errandId: helperRequest.errandId, isFavour: true });
+    dispatch(clearHelperRequest());
+  };
+
   // Requester: counter offer modal handlers
   const handleCounterOfferAccept = () => {
     const socket = getSocket();
@@ -157,6 +164,13 @@ export default function ProtectedLayout() {
               { type: TAGS.ERRAND, id: payload.errandId },
             ]),
           );
+          if (user?.role === "requester" && payload.isFavour) {
+            Toast.show({
+              type: "success",
+              text1: "You're in luck! 🤝",
+              text2: "A helper is doing your errand as a favour — no charge!",
+            });
+          }
           if (user?.role === "helper") {
             router.push(`/helper/task-details?id=${payload.errandId}`);
           }
@@ -277,6 +291,7 @@ export default function ProtectedLayout() {
         onAccept={handleAccept}
         onDecline={handleDecline}
         onCounterOffer={handleCounterOffer}
+        onFavour={handleFavour}
       />
       <CounterOfferModal
         counterOffer={counterOffer}

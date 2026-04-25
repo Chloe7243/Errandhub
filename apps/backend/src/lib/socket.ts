@@ -33,12 +33,7 @@ const userSockets = new Map<string, UserSocketEntry>();
  * Server instance so callers can attach additional namespaces if needed.
  */
 export const initSocket = (httpServer: HttpServer) => {
-  io = new Server(httpServer, {
-    cors: {
-      origin: "*",
-      methods: ["GET", "POST"],
-    },
-  });
+  io = new Server(httpServer);
 
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
@@ -141,9 +136,9 @@ export const initSocket = (httpServer: HttpServer) => {
       },
     );
 
-    socket.on("accept_errand", async ({ errandId }: { errandId: string }) => {
+    socket.on("accept_errand", async ({ errandId, isFavour }: { errandId: string; isFavour?: boolean }) => {
       if (role !== "helper") return;
-      await helperAcceptErrand(errandId, userId);
+      await helperAcceptErrand(errandId, userId, isFavour ?? false);
     });
 
     socket.on("decline_errand", async ({ errandId }: { errandId: string }) => {

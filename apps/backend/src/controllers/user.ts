@@ -246,7 +246,7 @@ export const updateAvatar = async (
  * can PATCH a single toggle without clobbering the rest.
  *
  * Accepted fields: isAvailable, notificationRadius (km), errandUpdates,
- * newMessages, promotions.
+ * newMessages.
  */
 export const updateSettings = async (
   req: AuthRequest,
@@ -259,7 +259,6 @@ export const updateSettings = async (
       notificationRadius,
       errandUpdates,
       newMessages,
-      promotions,
     } = req.body;
 
     const settings = await prisma.userSettings.upsert({
@@ -269,7 +268,6 @@ export const updateSettings = async (
         ...(notificationRadius !== undefined && { notificationRadius }),
         ...(errandUpdates !== undefined && { errandUpdates }),
         ...(newMessages !== undefined && { newMessages }),
-        ...(promotions !== undefined && { promotions }),
       },
       create: {
         userId: req.userId!,
@@ -277,7 +275,6 @@ export const updateSettings = async (
         notificationRadius: notificationRadius ?? 2.0,
         errandUpdates: errandUpdates ?? true,
         newMessages: newMessages ?? true,
-        promotions: promotions ?? false,
       },
     });
 

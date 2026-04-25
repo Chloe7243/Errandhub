@@ -67,7 +67,6 @@ model UserSettings {
   notificationRadius Float    @default(2.0)
   errandUpdates      Boolean  @default(true)
   newMessages        Boolean  @default(true)
-  promotions         Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -90,6 +89,7 @@ model Errand {
   estimatedDuration     Float?
   startedAt             DateTime?
   finalCost             Float?
+  isFavour              Boolean      @default(false)
   status                ErrandStatus @default(POSTED)
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
@@ -106,20 +106,6 @@ model Errand {
   requester User     @relation("RequesterErrands", fields: [requesterId], references: [id])
   dispute   Dispute?
 }
-
-// model Rating {
-//   id         String   @id @default(cuid())
-//   errandId   String   @unique
-//   raterId    String
-//   ratedId    String
-//   score      Int
-//   comment    String?
-//   createdAt  DateTime @default(now())
-
-//   errand Errand @relation(fields: [errandId], references: [id])
-//   rater  User   @relation("GivenRatings", fields: [raterId], references: [id])
-//   rated  User   @relation("ReceivedRatings", fields: [ratedId], references: [id])
-// }
 
 model Dispute {
   id               String        @id @default(cuid())
