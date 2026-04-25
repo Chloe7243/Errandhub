@@ -11,7 +11,9 @@
     "frontend": "npm run start --workspace=apps/frontend"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "concurrently": "^8.2.2",
+    "jest": "^30.3.0",
     "typescript": "^5.0.0"
   }
 }
