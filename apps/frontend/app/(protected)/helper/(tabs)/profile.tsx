@@ -9,6 +9,7 @@ import {
   useGetSettingsQuery,
   useUpdateSettingsMutation,
   useUpdateAvatarMutation,
+  useDeleteAccountMutation,
 } from "@/store/api/user";
 import * as ImagePicker from "expo-image-picker";
 import { logoutUser, updateUserState } from "@/store/slices";
@@ -156,6 +157,30 @@ const HelperSettings = () => {
     } catch (err) {
       displayErrorMessage(err);
     }
+  };
+
+  const [deleteAccount] = useDeleteAccountMutation();
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account",
+      "This will permanently delete your account and all associated data. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteAccount().unwrap();
+              dispatch(logoutUser());
+            } catch (err) {
+              displayErrorMessage(err);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleLogout = () => {
@@ -454,6 +479,32 @@ const HelperSettings = () => {
             {/* Account */}
             <View style={styles.section}>
               <SwitchRole />
+              <TouchableOpacity
+                style={[
+                  styles.settingRow,
+                  {
+                    backgroundColor: colors.backgroundSecondary,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={handleDeleteAccount}
+              >
+                <View style={styles.settingRowLeft}>
+                  <View
+                    style={[
+                      styles.iconWrapper,
+                      { backgroundColor: colors.error + "15" },
+                    ]}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={colors.error} />
+                  </View>
+                  <Text style={[styles.settingLabel, { color: colors.error }]}>
+                    Delete Account
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textTertiary} />
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={[
                   styles.settingRow,

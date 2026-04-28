@@ -7,6 +7,7 @@ import {
   getSettings,
   getUser,
   savePushToken,
+  deleteAccount,
 } from "../controllers/user";
 import { requireRole } from "../middleware/role";
 
@@ -16,6 +17,7 @@ const router = Router();
 // role because the returned shape (requester vs helper view) and the
 // summary aggregates differ.
 router.get("/me", getUser);
+router.delete("/me", deleteAccount);
 router.patch("/avatar", updateAvatar);
 router.post("/push-token", savePushToken);
 router.get("/settings", getSettings);

@@ -14,6 +14,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -32,6 +33,7 @@ const HelperErrandHistory = () => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
   const [activeFilter, setActiveFilter] = useState<Filter>("ALL");
+  const [search, setSearch] = useState("");
   const [selectedErrand, setSelectedErrand] = useState<any | null>(null);
 
   const {
@@ -45,7 +47,10 @@ const HelperErrandHistory = () => {
     { refetchOnMountOrArgChange: true },
   );
 
-  const errands = data?.errands ?? [];
+  const allErrands = data?.errands ?? [];
+  const errands = allErrands.filter((e: any) =>
+    e.title.toLowerCase().includes(search.toLowerCase()),
+  );
   const {
     totalEarned = 0,
     totalCompleted = 0,
@@ -148,6 +153,28 @@ const HelperErrandHistory = () => {
                     </View>
                   ))}
                 </View>
+              </View>
+
+              {/* Search */}
+              <View
+                style={[
+                  styles.searchBar,
+                  { backgroundColor: colors.backgroundSecondary, borderColor: colors.border },
+                ]}
+              >
+                <Ionicons name="search-outline" size={18} color={colors.textTertiary} />
+                <TextInput
+                  placeholder="Search errands..."
+                  placeholderTextColor={colors.textTertiary}
+                  value={search}
+                  onChangeText={setSearch}
+                  style={[styles.searchInput, { color: colors.text }]}
+                />
+                {search.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearch("")}>
+                    <Ionicons name="close-circle" size={18} color={colors.textTertiary} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Filters */}
@@ -467,12 +494,24 @@ const styles = StyleSheet.create({
   card: { flex: 1, padding: 12, borderRadius: 10, borderWidth: 1, gap: 6 },
   cardValue: { fontSize: 18, fontWeight: "700" },
   cardLabel: { fontSize: 11 },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginHorizontal: 16,
+    marginTop: 16,
+  },
+  searchInput: { flex: 1, fontSize: 15 },
   filterSection: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingTop: 12,
   },
   filterRow: { flexDirection: "row", gap: 8 },
   filterChip: {

@@ -25,6 +25,9 @@ const baseQuery = fetchBaseQuery({
       headers.set("Authorization", `Bearer ${token}`);
     }
     headers.set("accept", "application/json");
+    // ngrok intercepts browser requests with a warning page unless this header
+    // is present. Without it the app receives HTML instead of JSON.
+    headers.set("ngrok-skip-browser-warning", "true");
     return headers;
   },
 });

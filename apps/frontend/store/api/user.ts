@@ -77,6 +77,12 @@ const usersApi = api.injectEndpoints({
       }),
       invalidatesTags: [TAGS.USER],
     }),
+    deleteAccount: builder.mutation<{ message: string }, void>({
+      query: () => ({
+        url: "user/me",
+        method: "DELETE",
+      }),
+    }),
   }),
 });
 
@@ -88,4 +94,5 @@ export const {
   useGetRequestedErrandsQuery,
   useSavePushTokenMutation,
   useUpdateAvatarMutation,
+  useDeleteAccountMutation,
 } = usersApi;

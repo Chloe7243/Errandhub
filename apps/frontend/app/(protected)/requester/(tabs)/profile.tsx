@@ -11,6 +11,7 @@ import {
   useGetUserDetailsQuery,
   useUpdateAvatarMutation,
   useGetRequestedErrandsQuery,
+  useDeleteAccountMutation,
 } from "@/store/api/user";
 import {
   useGetPaymentMethodsQuery,
@@ -140,6 +141,30 @@ const Profile = () => {
 
   const toggle = (section: Section) => {
     setExpanded((prev) => (prev === section ? null : section));
+  };
+
+  const [deleteAccount] = useDeleteAccountMutation();
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account",
+      "This will permanently delete your account and all associated data. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteAccount().unwrap();
+              dispatch(logoutUser());
+            } catch (err) {
+              displayErrorMessage(err);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const handleLogout = (): void => {
@@ -407,6 +432,15 @@ const Profile = () => {
 
           <View style={[styles.actions]}>
             <SwitchRole />
+            <TouchableOpacity
+              style={[styles.logoutButton, { borderColor: colors.border }]}
+              onPress={handleDeleteAccount}
+            >
+              <Ionicons name="trash-outline" size={20} color={colors.error} />
+              <Text style={[styles.logoutText, { color: colors.error }]}>
+                Delete Account
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.logoutButton, { borderColor: colors.border }]}
               onPress={handleLogout}

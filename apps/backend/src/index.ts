@@ -4,6 +4,7 @@ import express from "express";
 import { createServer } from "http";
 
 import { initSocket } from "./lib/socket";
+import { prisma } from "./lib/prisma";
 
 import authRoutes from "./routes/auth";
 import userRoutes from "./routes/user";
@@ -55,3 +56,19 @@ app.use(errorHandler);
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// FR-22: Auto-expire POSTED errands that were never matched.
+// Runs every 10 minutes. Any errand that has been POSTED for longer than
+// 30 minutes without being picked up is transitioned to EXPIRED so it
+// doesn't sit stale in the requester's active list indefinitely.
+const EXPIRY_INTERVAL_MS = 10 * 60 * 1000;
+const EXPIRY_THRESHOLD_MS = 30 * 60 * 1000;
+
+setInterval(async () => {
+  const cutoff = new Date(Date.now() - EXPIRY_THRESHOLD_MS);
+  const { count } = await prisma.errand.updateMany({
+    where: { status: "POSTED", createdAt: { lt: cutoff } },
+    data: { status: "EXPIRED" },
+  });
+  if (count > 0) console.log(`[expiry] Expired ${count} stale errand(s)`);
+}, EXPIRY_INTERVAL_MS);

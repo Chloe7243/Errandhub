@@ -1,3 +1,4 @@
+import { stripe } from "../lib/stripe";
 import { prisma } from "../lib/prisma";
 import { AuthRequest } from "../types/auth";
 import { AppError } from "../middleware/errors";
@@ -238,6 +239,55 @@ export const updateAvatar = async (
 };
 
 /**
+ * DELETE /user/me — permanently delete the authenticated user's account.
+ *Active errands are cancelled and any held Stripe Payment
+ * Intents are released before the user row is removed.
+ */
+export const deleteAccount = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = req.userId!;
+
+    // Cancel any active Payment Intents before removing the user so funds
+    // are not held indefinitely in Stripe escrow.
+    const activeErrands = await prisma.errand.findMany({
+      where: {
+        requesterId: userId,
+        stripePaymentIntentId: { not: null },
+        status: { notIn: ["COMPLETED", "CANCELLED", "EXPIRED"] },
+      },
+      select: { id: true, stripePaymentIntentId: true },
+    });
+
+    if (activeErrands.length > 0) {
+      await Promise.allSettled(
+        activeErrands.map((e) =>
+          stripe.paymentIntents.cancel(e.stripePaymentIntentId!),
+        ),
+      );
+    }
+
+    // Delete in dependency order to satisfy FK constraints.
+    await prisma.dispute.deleteMany({
+      where: {
+        OR: [{ raisedById: userId }, { errand: { requesterId: userId } }],
+      },
+    });
+    await prisma.errand.deleteMany({ where: { requesterId: userId } });
+    await prisma.errand.deleteMany({ where: { helperId: userId } });
+    await prisma.userSettings.deleteMany({ where: { userId } });
+    await prisma.user.delete({ where: { id: userId } });
+
+    res.status(200).json({ message: "Account deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * PATCH /users/me/settings — upsert per-user preferences.
  *
  * Upsert rather than update because the row is created lazily on first
@@ -254,12 +304,8 @@ export const updateSettings = async (
   next: NextFunction,
 ) => {
   try {
-    const {
-      isAvailable,
-      notificationRadius,
-      errandUpdates,
-      newMessages,
-    } = req.body;
+    const { isAvailable, notificationRadius, errandUpdates, newMessages } =
+      req.body;
 
     const settings = await prisma.userSettings.upsert({
       where: { userId: req.userId! },

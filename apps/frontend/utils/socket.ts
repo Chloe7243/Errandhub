@@ -23,6 +23,8 @@ export const connectSocket = async (): Promise<Socket> => {
   socket = io(process.env.EXPO_PUBLIC_API_URL, {
     auth: { token },
     transports: ["websocket"],
+    // ngrok requires this header to bypass its browser-warning interstitial.
+    extraHeaders: { "ngrok-skip-browser-warning": "true" },
   });
 
   // Wait for the connection to actually establish before returning.
