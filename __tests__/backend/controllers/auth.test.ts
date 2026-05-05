@@ -62,7 +62,7 @@ const makeRes = () => {
   return res;
 };
 
-const next = jest.fn() as NextFunction;
+const next = jest.fn() as jest.Mock<any, any>;
 
 /** A minimal user row as Prisma would return it. */
 const dbUser = {
@@ -97,7 +97,7 @@ describe("signUp", () => {
     await signUp(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
     expect(err.statusCode).toBe(400);
   });
@@ -117,7 +117,7 @@ describe("signUp", () => {
 
     await signUp(req, res, next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
     expect(err.statusCode).toBe(400);
     expect(err.message).toMatch(/already in use/i);
@@ -177,7 +177,7 @@ describe("login", () => {
     const req = makeReq({ email: "not-an-email" });
     await login(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
     expect(err.statusCode).toBe(400);
   });
@@ -187,7 +187,7 @@ describe("login", () => {
     const req = makeReq({ email: "alice@uni.ac.uk", password: "Password1!" });
     await login(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(401);
     // Same message whether user doesn't exist or password is wrong — avoids email enumeration.
     expect(err.message).toMatch(/invalid credentials/i);
@@ -200,7 +200,7 @@ describe("login", () => {
     const req = makeReq({ email: "alice@uni.ac.uk", password: "WrongPass1!" });
     await login(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(401);
     expect(err.message).toMatch(/invalid credentials/i);
   });
@@ -229,7 +229,7 @@ describe("selectRole", () => {
     const req = makeReq({ role: "admin" }, { userId: "u1" });
     await selectRole(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
     expect(err.statusCode).toBe(400);
   });
@@ -239,7 +239,7 @@ describe("selectRole", () => {
     const req = makeReq({ role: "helper" }, { userId: "ghost" });
     await selectRole(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(401);
   });
 
@@ -269,7 +269,7 @@ describe("forgetPassword", () => {
     const req = makeReq({});
     await forgetPassword(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
     expect(err.statusCode).toBe(400);
   });
@@ -279,7 +279,7 @@ describe("forgetPassword", () => {
     const req = makeReq({ email: "nobody@uni.ac.uk" });
     await forgetPassword(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(404);
   });
 
@@ -311,7 +311,7 @@ describe("resetPassword", () => {
     const req = makeReq({ token: "some-token" });
     await resetPassword(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
     expect(err.statusCode).toBe(400);
   });
@@ -322,7 +322,7 @@ describe("resetPassword", () => {
     const req = makeReq({ token: "expired-token", password: "NewPass1!" });
     await resetPassword(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(400);
     expect(err.message).toMatch(/invalid or expired/i);
   });

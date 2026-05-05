@@ -152,10 +152,10 @@ describe("startErrandMatching", () => {
     );
   });
 
-  it("expires the errand immediately when no helpers are connected", async () => {
+  it("notifies offline available helpers and leaves the errand POSTED when no helpers are connected", async () => {
     const errandId = nextErrandId();
     setupSchedulerMocks(errandId);
-    // Override: no one connected.
+    // Override: no one connected — HELPER_ID is available in DB but offline.
     mockGetConnectedHelpers.mockReturnValue([]);
 
     await startErrandMatching({
@@ -164,16 +164,16 @@ describe("startErrandMatching", () => {
       status: "POSTED",
     });
 
-    expect(mockPrismaErrand.update).toHaveBeenCalledWith(
+    // Should NOT expire — errand stays POSTED for the stale expiry job.
+    expect(mockPrismaErrand.update).not.toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "EXPIRED" }),
       }),
     );
-    // Requester should hear about the expiry.
-    expect(mockEmit).toHaveBeenCalledWith(
-      REQUESTER_ID,
-      "errand_expired",
-      expect.objectContaining({ errandId }),
+    // Offline available helper should receive a push notification.
+    expect(mockNotify).toHaveBeenCalledWith(
+      HELPER_ID,
+      expect.objectContaining({ title: "New errand near you" }),
     );
   });
 
@@ -292,19 +292,22 @@ describe("helperDeclineErrand", () => {
     });
     jest.clearAllMocks();
 
-    // On the second scheduling pass, no untried helpers remain → expires.
+    // On the second scheduling pass, no connected helpers remain.
     setupSchedulerMocks(errandId);
-    // Override so HELPER_ID is still connected but now in triedHelperIds → 0 eligible.
-    // Easiest way: return no connected helpers on second pass.
     mockGetConnectedHelpers.mockReturnValue([]);
 
     await helperDeclineErrand(errandId, HELPER_ID);
 
-    // scheduleHelper ran again and expired the errand (no helpers left).
-    expect(mockPrismaErrand.update).toHaveBeenCalledWith(
+    // scheduleHelper ran again — no connected helpers so errand stays POSTED
+    // and offline available helpers are notified via push.
+    expect(mockPrismaErrand.update).not.toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ status: "EXPIRED" }),
       }),
+    );
+    expect(mockNotify).toHaveBeenCalledWith(
+      HELPER_ID,
+      expect.objectContaining({ title: "New errand near you" }),
     );
   });
 });

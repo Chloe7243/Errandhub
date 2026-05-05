@@ -149,7 +149,7 @@ const RoleSelection = () => {
               <Text
                 style={[styles.roleSubtitle, { color: colors.textSecondary }]}
               >
-                Get help with errands, and save time.
+                Help with errands, and get paid.
               </Text>
             </View>
           </Pressable>

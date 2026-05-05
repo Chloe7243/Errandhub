@@ -11,6 +11,7 @@ import {
   useUpdateAvatarMutation,
   useDeleteAccountMutation,
 } from "@/store/api/user";
+import { useUpdateErrandStatusMutation } from "@/store/api/errand";
 import * as ImagePicker from "expo-image-picker";
 import { logoutUser, updateUserState } from "@/store/slices";
 import { Ionicons } from "@expo/vector-icons";
@@ -159,6 +160,7 @@ const HelperSettings = () => {
     }
   };
 
+  const [updateErrandStatus] = useUpdateErrandStatusMutation();
   const [deleteAccount] = useDeleteAccountMutation();
 
   const handleDeleteAccount = () => {
@@ -184,18 +186,40 @@ const HelperSettings = () => {
   };
 
   const handleLogout = () => {
-    const activeCount = activeErrandsData?.errands?.length ?? 0;
-    const message =
-      activeCount > 0
-        ? `You have ${activeCount} active errand${activeCount > 1 ? "s" : ""} in progress. They may be cancelled if you log out.`
-        : "Are you sure you want to log out?";
+    // Only IN_PROGRESS errands get cancelled on logout — REVIEWING ones can still
+    // be confirmed by the requester, so we leave those intact.
+    const inProgressErrands =
+      activeErrandsData?.errands?.filter(
+        (e: any) => e.status === "IN_PROGRESS",
+      ) ?? [];
+    const reviewingErrands =
+      activeErrandsData?.errands?.filter(
+        (e: any) => e.status === "REVIEWING",
+      ) ?? [];
+
+    let message = "Are you sure you want to log out?";
+    if (inProgressErrands.length > 0 && reviewingErrands.length > 0) {
+      message = `You have ${inProgressErrands.length} in-progress errand${inProgressErrands.length > 1 ? "s" : ""} that will be cancelled, and ${reviewingErrands.length} awaiting review that will remain open.`;
+    } else if (inProgressErrands.length > 0) {
+      message = `You have ${inProgressErrands.length} in-progress errand${inProgressErrands.length > 1 ? "s" : ""} that will be cancelled when you log out.`;
+    } else if (reviewingErrands.length > 0) {
+      message = `You have ${reviewingErrands.length} errand${reviewingErrands.length > 1 ? "s" : ""} awaiting review. The requester can still confirm ${reviewingErrands.length > 1 ? "them" : "it"} after you log out.`;
+    }
 
     Alert.alert("Log Out", message, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Log Out",
         style: "destructive",
-        onPress: () => dispatch(logoutUser()),
+        onPress: async () => {
+          // Cancel all IN_PROGRESS errands first — best effort, don't block logout on failure.
+          await Promise.allSettled(
+            inProgressErrands.map((e: any) =>
+              updateErrandStatus({ errandId: e.id, status: "CANCELLED" }),
+            ),
+          );
+          dispatch(logoutUser());
+        },
       },
     ]);
   };

@@ -264,6 +264,7 @@ const Profile = () => {
               onPress={() => toggle("editProfile")}
             >
               <Input
+                editable={false}
                 label="First Name"
                 placeholder="First name"
                 value={user.firstName}
@@ -271,6 +272,7 @@ const Profile = () => {
                 onBlur={() => {}}
               />
               <Input
+                editable={false}
                 label="Last Name"
                 placeholder="Last name"
                 value={user.lastName}
@@ -278,6 +280,7 @@ const Profile = () => {
                 onBlur={() => {}}
               />
               <Input
+                editable={false}
                 label="Phone Number"
                 placeholder="Phone number"
                 value={user.phone}
@@ -285,7 +288,7 @@ const Profile = () => {
                 onBlur={() => {}}
                 keyboardType="phone-pad"
               />
-              {user.university && (
+              {/* {user.university && (
                 <Input
                   label="University"
                   placeholder="University"
@@ -293,12 +296,12 @@ const Profile = () => {
                   onChangeText={() => {}}
                   onBlur={() => {}}
                 />
-              )}
-              <TouchableOpacity
+              )} */}
+              {/* <TouchableOpacity
                 style={[styles.saveButton, { backgroundColor: colors.primary }]}
               >
                 <Text style={styles.saveText}>Save Changes</Text>
-              </TouchableOpacity>
+              </TouchableOpacity> */}
             </ExpandableSection>
 
             {/* Payment Methods */}
@@ -366,7 +369,7 @@ const Profile = () => {
               <AddPaymentMethodButton />
             </ExpandableSection>
             {/* Notifications */}
-            <ExpandableSection
+            {/* <ExpandableSection
               icon="notifications-outline"
               label="Notifications"
               expanded={expanded === "notifications"}
@@ -384,7 +387,7 @@ const Profile = () => {
                   </TouchableOpacity>
                 </View>
               ))}
-            </ExpandableSection>
+            </ExpandableSection> */}
 
             {/* Appearance */}
             <ExpandableSection

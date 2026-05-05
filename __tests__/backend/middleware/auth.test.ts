@@ -27,12 +27,9 @@ afterEach(() => {
 
 describe("authMiddleware", () => {
   it("calls next() and attaches userId + role for a valid token", () => {
-    const token = jwt.sign(
-      { userId: "u1", role: "requester" },
-      JWT_SECRET,
-    );
+    const token = jwt.sign({ userId: "u1", role: "requester" }, JWT_SECRET);
     const req = makeReq(`Bearer ${token}`);
-    const next = jest.fn();
+    const next = jest.fn() as jest.Mock<any, any>;
 
     authMiddleware(req, mockRes, next);
 
@@ -46,26 +43,26 @@ describe("authMiddleware", () => {
 
   it("passes an AppError(401) to next when the Authorization header is missing", () => {
     const req = makeReq(); // no header
-    const next = jest.fn() as NextFunction;
+    const next = jest.fn() as jest.Mock<any, any>;
 
     authMiddleware(req, mockRes, next);
 
     expect(next).toHaveBeenCalledTimes(1);
     const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
-    expect((err as AppError).statusCode).toBe(401);
+    expect((err as unknown as AppError).statusCode).toBe(401);
   });
 
   it("passes an AppError(401) to next when the scheme is not Bearer", () => {
     const token = jwt.sign({ userId: "u1", role: "helper" }, JWT_SECRET);
     const req = makeReq(`Token ${token}`);
-    const next = jest.fn() as NextFunction;
+    const next = jest.fn() as jest.Mock<any, any>;
 
     authMiddleware(req, mockRes, next);
 
     const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
-    expect((err as AppError).statusCode).toBe(401);
+    expect((err as unknown as AppError).statusCode).toBe(401);
   });
 
   it("passes an AppError(401) to next for an expired token", () => {
@@ -74,35 +71,35 @@ describe("authMiddleware", () => {
       expiresIn: 0,
     });
     const req = makeReq(`Bearer ${token}`);
-    const next = jest.fn() as NextFunction;
+    const next = jest.fn() as jest.Mock<any, any>;
 
     authMiddleware(req, mockRes, next);
 
     const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
-    expect((err as AppError).statusCode).toBe(401);
+    expect((err as unknown as AppError).statusCode).toBe(401);
   });
 
   it("passes an AppError(401) to next when the token is signed with the wrong secret", () => {
     const token = jwt.sign({ userId: "u1", role: "helper" }, "wrong-secret");
     const req = makeReq(`Bearer ${token}`);
-    const next = jest.fn() as NextFunction;
+    const next = jest.fn() as jest.Mock<any, any>;
 
     authMiddleware(req, mockRes, next);
 
     const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
-    expect((err as AppError).statusCode).toBe(401);
+    expect((err as unknown as AppError).statusCode).toBe(401);
   });
 
   it("passes an AppError(401) to next for an obviously malformed token string", () => {
     const req = makeReq("Bearer not.a.jwt");
-    const next = jest.fn() as NextFunction;
+    const next = jest.fn() as jest.Mock<any, any>;
 
     authMiddleware(req, mockRes, next);
 
     const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
-    expect((err as AppError).statusCode).toBe(401);
+    expect((err as unknown as AppError).statusCode).toBe(401);
   });
 });

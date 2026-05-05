@@ -86,6 +86,8 @@ const usersApi = api.injectEndpoints({
   }),
 });
 
+export { usersApi };
+
 export const {
   useGetSettingsQuery,
   useGetUserDetailsQuery,

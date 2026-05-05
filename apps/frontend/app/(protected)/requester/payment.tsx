@@ -250,7 +250,7 @@ const Payment = () => {
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <View style={styles.row}>
             <Text style={[styles.totalLabel, { color: colors.text }]}>
-              Total
+              Estimated Total
             </Text>
             <Text style={[styles.totalValue, { color: colors.primary }]}>
               £{total.toFixed(2)}

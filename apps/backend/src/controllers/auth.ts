@@ -164,6 +164,11 @@ export const selectRole = async (
       throw new AppError("Invalid user", 401);
     }
 
+    // Persist the chosen role so the matching service can filter by it —
+    // without this, an available user in requester mode would still receive
+    // errand dispatch notifications.
+    await prisma.user.update({ where: { id: userId }, data: { role } });
+
     const userData = {
       userId: user.id,
       firstName: user.firstName,

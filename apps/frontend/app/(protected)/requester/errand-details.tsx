@@ -6,7 +6,10 @@ import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import type { RootState } from "@/store";
-import { useGetErrandByIdQuery } from "@/store/api/errand";
+import {
+  useGetErrandByIdQuery,
+  useUpdateErrandStatusMutation,
+} from "@/store/api/errand";
 import { useAppSelector } from "@/store/hooks";
 import { parseChecklist } from "@/store/slices/checklist";
 import { formatErrandType } from "@/utils/errand";
@@ -17,6 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,6 +35,8 @@ const ErrandDetails = () => {
   const { currentData, isLoading, refetch } = useGetErrandByIdQuery(id!, {
     refetchOnMountOrArgChange: true,
   });
+  const [updateStatus, { isLoading: isCancelling }] =
+    useUpdateErrandStatusMutation();
 
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -59,7 +65,7 @@ const ErrandDetails = () => {
         ? Math.max(
             0,
             Math.ceil(
-              (new Date(errand.updatedAt).getTime() + 60 * 1000 - Date.now()) /
+              (new Date(errand.updatedAt).getTime() + 10 * 1000 - Date.now()) /
                 1000,
             ),
           )
@@ -81,6 +87,40 @@ const ErrandDetails = () => {
     }, 1000);
     return () => clearInterval(interval);
   }, [isExpired, errand?.updatedAt, getRepostSecondsLeft]);
+
+  // Requester can cancel a POSTED or IN_PROGRESS errand (before proof is uploaded).
+  const isCancellable = errand?.status === "POSTED";
+
+  const handleCancel = () => {
+    if (!errand) return;
+    const message = "Are you sure you want to cancel this errand?";
+
+    Alert.alert("Cancel Errand", message, [
+      { text: "Keep Errand", style: "cancel" },
+      {
+        text: "Yes, Cancel",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await updateStatus({
+              errandId: errand.id,
+              status: "CANCELLED",
+            }).unwrap();
+            Toast.show({
+              type: "success",
+              text1: "Errand cancelled",
+            });
+          } catch {
+            Toast.show({
+              type: "error",
+              text1: "Could not cancel errand",
+              text2: "Please try again.",
+            });
+          }
+        },
+      },
+    ]);
+  };
 
   const handleRepost = () => {
     if (!errand) return;
@@ -143,7 +183,12 @@ const ErrandDetails = () => {
                   {formatErrandType(errand.type)}
                 </Text>
                 {errand.isFavour ? (
-                  <Text style={[styles.amount, { color: colors.success, fontSize: 13 }]}>
+                  <Text
+                    style={[
+                      styles.amount,
+                      { color: colors.success, fontSize: 13 },
+                    ]}
+                  >
                     Favour
                   </Text>
                 ) : (
@@ -349,7 +394,12 @@ const ErrandDetails = () => {
                     {errand.isFavour ? "Payment" : "Amount Paid"}
                   </Text>
                   {errand.isFavour ? (
-                    <Text style={[styles.amount, { color: colors.success, fontSize: 13 }]}>
+                    <Text
+                      style={[
+                        styles.amount,
+                        { color: colors.success, fontSize: 13 },
+                      ]}
+                    >
                       Favour
                     </Text>
                   ) : (
@@ -463,6 +513,32 @@ const ErrandDetails = () => {
                   </Text>
                 </TouchableOpacity>
               </View>
+            )}
+
+            {/* Cancel button — only available before proof is submitted */}
+            {isCancellable && (
+              <TouchableOpacity
+                style={[
+                  styles.cancelButton,
+                  {
+                    borderColor: colors.error,
+                    opacity: isCancelling ? 0.6 : 1,
+                  },
+                ]}
+                onPress={handleCancel}
+                disabled={isCancelling}
+              >
+                <Ionicons
+                  name="close-circle-outline"
+                  size={18}
+                  color={colors.error}
+                />
+                <Text
+                  style={[styles.cancelButtonText, { color: colors.error }]}
+                >
+                  {isCancelling ? "Cancelling..." : "Cancel Errand"}
+                </Text>
+              </TouchableOpacity>
             )}
 
             {/* Terminal state notice */}
@@ -605,4 +681,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   repostButtonText: { color: "#fff", fontWeight: "600", fontSize: 15 },
+  cancelButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  cancelButtonText: { fontSize: 15, fontWeight: "600" },
 });

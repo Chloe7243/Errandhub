@@ -100,6 +100,7 @@ const HelperHome = () => {
 
   const activeTask = activeData?.errands?.[0] ?? null;
   const hasActiveTask = !!activeTask;
+  const isReviewing = activeTask?.status === "REVIEWING";
 
   if (locationPermission === "denied") {
     return (
@@ -251,7 +252,7 @@ const HelperHome = () => {
 
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Active Task
+            {isReviewing ? "Awaiting Review" : "Active Task"}
           </Text>
           {isLoading ? (
             <LoadingSpinner fullScreen customSize={1.5} />
@@ -328,14 +329,22 @@ const HelperHome = () => {
               <TouchableOpacity
                 style={[
                   styles.continueButton,
-                  { backgroundColor: colors.primary },
+                  { backgroundColor: isReviewing ? colors.backgroundSecondary : colors.primary,
+                    borderWidth: isReviewing ? 1 : 0,
+                    borderColor: isReviewing ? colors.primary : undefined },
                 ]}
                 onPress={() =>
                   router.push(`/helper/task-details?id=${activeTask.id}`)
                 }
               >
-                <Ionicons name="navigate-outline" size={16} color="#fff" />
-                <Text style={styles.continueButtonText}>Continue Task</Text>
+                <Ionicons
+                  name={isReviewing ? "eye-outline" : "navigate-outline"}
+                  size={16}
+                  color={isReviewing ? colors.primary : "#fff"}
+                />
+                <Text style={[styles.continueButtonText, { color: isReviewing ? colors.primary : "#fff" }]}>
+                  {isReviewing ? "View Task" : "Continue Task"}
+                </Text>
               </TouchableOpacity>
             </TouchableOpacity>
           )}

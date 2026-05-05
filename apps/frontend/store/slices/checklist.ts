@@ -45,7 +45,7 @@ export default checklistSlice.reducer;
 export const parseChecklist = (description: string): string[] => {
   try {
     const parsed = JSON.parse(description);
-    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    if (Array.isArray(parsed)) return parsed;
   } catch {}
   return description ? [description] : [];
 };

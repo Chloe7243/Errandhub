@@ -8,12 +8,15 @@
   "scripts": {
     "dev": "concurrently \"npm run start --workspace=apps/frontend\" \"npm run dev --workspace=apps/backend\" ",
     "backend": "npm run dev --workspace=apps/backend",
-    "frontend": "npm run start --workspace=apps/frontend"
+    "frontend": "npm run start --workspace=apps/frontend",
+    "test": "jest",
+    "test:coverage": "jest --coverage"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "concurrently": "^8.2.2",
     "jest": "^30.3.0",
+    "ts-jest": "^29.4.9",
     "typescript": "^5.0.0"
   }
 }

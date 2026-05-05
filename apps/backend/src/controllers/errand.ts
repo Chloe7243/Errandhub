@@ -260,7 +260,7 @@ export const updateErrandStatus = async (
     const allowedTransitions: Record<string, string[]> = {
       POSTED: ["CANCELLED", "EXPIRED"],
       IN_PROGRESS: ["REVIEWING", "CANCELLED"],
-      REVIEWING: ["COMPLETED", "DISPUTED"],
+      REVIEWING: ["COMPLETED", "DISPUTED", "CANCELLED"],
     };
 
     const allowed = allowedTransitions[errand.status];

@@ -5,16 +5,19 @@ import { AuthRequest } from "../../../apps/backend/src/types/auth";
 import { Role } from "../../../shared/schemas/roles";
 
 const mockRes = {} as Response;
+const next = jest.fn() as jest.Mock<any, any>;
 
 /** Build a fake AuthRequest with the given role already set (as authMiddleware would). */
-const makeReq = (role?: string): AuthRequest =>
-  ({ role } as AuthRequest);
+const makeReq = (role?: string): AuthRequest => ({ role }) as AuthRequest;
+
+beforeEach(() => {
+  next.mockClear();
+});
 
 describe("requireRole", () => {
   it("calls next() without an error when the roles match", () => {
     const middleware = requireRole("requester");
     const req = makeReq("requester");
-    const next = jest.fn() as NextFunction;
 
     middleware(req, mockRes, next);
 
@@ -26,7 +29,6 @@ describe("requireRole", () => {
   it("throws an AppError(403) when the role does not match", () => {
     const middleware = requireRole("helper");
     const req = makeReq("requester");
-    const next = jest.fn() as NextFunction;
 
     expect(() => middleware(req, mockRes, next)).toThrow(AppError);
     expect(() => middleware(req, mockRes, next)).toThrow(
@@ -39,7 +41,7 @@ describe("requireRole", () => {
     const req = makeReq("helper");
 
     try {
-      middleware(req, mockRes, jest.fn());
+      middleware(req, mockRes, next);
     } catch (err) {
       expect(err).toBeInstanceOf(AppError);
       expect((err as AppError).statusCode).toBe(403);
@@ -50,7 +52,7 @@ describe("requireRole", () => {
     const middleware = requireRole("helper");
     const req = makeReq(undefined);
 
-    expect(() => middleware(req, mockRes, jest.fn())).toThrow(AppError);
+    expect(() => middleware(req, mockRes, next)).toThrow(AppError);
   });
 
   it.each<Role>(["helper", "requester"])(
@@ -58,7 +60,6 @@ describe("requireRole", () => {
     (role) => {
       const middleware = requireRole(role);
       const req = makeReq(role);
-      const next = jest.fn() as NextFunction;
 
       middleware(req, mockRes, next);
 

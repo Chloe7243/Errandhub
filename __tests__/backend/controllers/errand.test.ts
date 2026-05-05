@@ -1,3 +1,5 @@
+/// <reference types="jest" />
+
 jest.mock("../../../apps/backend/src/lib/prisma", () => ({
   prisma: {
     errand: {
@@ -61,7 +63,7 @@ const makeReq = <P extends Record<string, string> = Record<string, string>>(
     query: {},
     headers: {},
     ...overrides,
-  } as unknown as AuthRequest<P>);
+  }) as unknown as AuthRequest<P>;
 
 const makeRes = () => {
   const res = {} as Response;
@@ -70,7 +72,7 @@ const makeRes = () => {
   return res;
 };
 
-const next = jest.fn() as NextFunction;
+const next = jest.fn() as jest.Mock<any, any>;
 
 /** A fully-populated errand row as Prisma would return it. */
 const dbErrand = {
@@ -127,7 +129,7 @@ describe("createErrand", () => {
     const req = makeReq({ body: { paymentMethodId: "pm_test_123" } });
     await createErrand(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
     expect(err.statusCode).toBe(400);
   });
@@ -138,7 +140,7 @@ describe("createErrand", () => {
 
     await createErrand(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
     expect(err.message).toMatch(/payment method/i);
   });
@@ -149,7 +151,7 @@ describe("createErrand", () => {
 
     await createErrand(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(400);
     expect(err.message).toMatch(/3 active/i);
   });
@@ -157,8 +159,9 @@ describe("createErrand", () => {
   it("creates the errand and responds 201 on success", async () => {
     mockErrand.count.mockResolvedValue(0);
     mockErrand.create.mockResolvedValue(dbErrand as any);
-    const { startErrandMatching } =
-      require("../../../apps/backend/src/services/matching");
+    const {
+      startErrandMatching,
+    } = require("../../../apps/backend/src/services/matching");
 
     const req = makeReq({ body: validBody });
     const res = makeRes();
@@ -184,7 +187,7 @@ describe("getErrandById", () => {
 
     await getErrandById(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
     expect(err.statusCode).toBe(404);
   });
@@ -194,7 +197,7 @@ describe("getErrandById", () => {
     const req = makeReq({ params: { id: "e1" } });
     const res = makeRes();
 
-    await getErrandById(req, makeRes(), next);
+    await getErrandById(req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(200);
   });
@@ -211,10 +214,13 @@ describe("startWork", () => {
   };
 
   it("calls next(AppError 400) for non-HANDS_ON_HELP errands", async () => {
-    mockErrand.findUnique.mockResolvedValue({ ...dbErrand, type: "PICKUP_DELIVERY" } as any);
+    mockErrand.findUnique.mockResolvedValue({
+      ...dbErrand,
+      type: "PICKUP_DELIVERY",
+    } as any);
     await startWork(makeReq({ params: { id: "e1" } }), makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(400);
     expect(err.message).toMatch(/hands-on help/i);
   });
@@ -225,7 +231,7 @@ describe("startWork", () => {
     const req = makeReq({ userId: "impostor", params: { id: "e1" } });
     await startWork(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(403);
   });
 
@@ -237,7 +243,7 @@ describe("startWork", () => {
     const req = makeReq({ userId: "helper-1", params: { id: "e1" } });
     await startWork(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(400);
     expect(err.message).toMatch(/not in progress/i);
   });
@@ -250,7 +256,7 @@ describe("startWork", () => {
     const req = makeReq({ userId: "helper-1", params: { id: "e1" } });
     await startWork(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(400);
     expect(err.message).toMatch(/already started/i);
   });
@@ -291,7 +297,7 @@ describe("extendWork", () => {
     });
     await extendWork(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(400);
   });
 
@@ -307,7 +313,7 @@ describe("extendWork", () => {
     });
     await extendWork(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.message).toMatch(/not been started/i);
   });
 
@@ -350,7 +356,7 @@ describe("updateErrandStatus", () => {
     });
     await updateErrandStatus(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(400);
     expect(err.message).toMatch(/cannot move/i);
   });
@@ -365,7 +371,7 @@ describe("updateErrandStatus", () => {
     });
     await updateErrandStatus(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(403);
   });
 
@@ -381,13 +387,16 @@ describe("updateErrandStatus", () => {
     });
     await updateErrandStatus(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(403);
   });
 
   it("updates status to REVIEWING and responds 200 for the assigned helper", async () => {
     mockErrand.findUnique.mockResolvedValue(dbErrand as any);
-    mockErrand.update.mockResolvedValue({ ...dbErrand, status: "REVIEWING" } as any);
+    mockErrand.update.mockResolvedValue({
+      ...dbErrand,
+      status: "REVIEWING",
+    } as any);
 
     const req = makeReq({
       userId: "helper-1",
@@ -442,7 +451,7 @@ describe("raiseDispute", () => {
     });
     await raiseDispute(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(400);
   });
 
@@ -458,7 +467,7 @@ describe("raiseDispute", () => {
     });
     await raiseDispute(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(400);
   });
 
@@ -471,7 +480,7 @@ describe("raiseDispute", () => {
     });
     await raiseDispute(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err.statusCode).toBe(403);
   });
 

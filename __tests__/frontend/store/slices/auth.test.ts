@@ -1,4 +1,4 @@
-jest.mock("@/utils/secure-store", () => ({
+jest.mock("../../../../apps/frontend/utils/secure-store", () => ({
   saveToken: jest.fn().mockResolvedValue(undefined),
   deleteToken: jest.fn().mockResolvedValue(undefined),
 }));
@@ -12,7 +12,7 @@ import authReducer, {
   AuthState,
 } from "../../../../apps/frontend/store/slices/auth-slice";
 import { configureStore } from "@reduxjs/toolkit";
-import { saveToken, deleteToken } from "@/utils/secure-store";
+import { saveToken, deleteToken } from "../../../../apps/frontend/utils/secure-store";
 
 const mockUser = {
   userId: "user-1",

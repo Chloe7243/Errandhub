@@ -79,7 +79,8 @@ describe("displayErrorMessage", () => {
       expect(mockShow).toHaveBeenCalledTimes(1);
       expect(mockShow).toHaveBeenCalledWith({
         type: "error",
-        text1: "No internet connection, please check your connection and try again.",
+        text1: "No internet connection",
+        text2: "Please check your connection and try again.",
       });
     });
 
@@ -103,7 +104,8 @@ describe("displayErrorMessage", () => {
 
       expect(mockShow).toHaveBeenCalledWith({
         type: "error",
-        text1: "No internet connection, please check your connection and try again.",
+        text1: "No internet connection",
+        text2: "Please check your connection and try again.",
       });
     });
   });

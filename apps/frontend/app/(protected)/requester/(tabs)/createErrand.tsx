@@ -108,10 +108,12 @@ const CreateErrand = () => {
               ).map((type) => (
                 <Pressable
                   key={type}
-                  style={styles.radioRow}
+                  style={[
+                    styles.radioRow,
+                    type === "SHOPPING" && { opacity: 0.5 },
+                  ]}
                   onPress={() => {
                     setTaskType(type);
-                    // Sync the selection into RHF so Zod sees the value.
                     setValue("type", type, { shouldValidate: true });
                   }}
                 >
@@ -142,150 +144,186 @@ const CreateErrand = () => {
             )}
           </View>
 
-          {/* Shared Fields */}
-          <View style={styles.fields}>
-            <Controller
-              control={control}
-              name="title"
-              render={({ field: { value, onChange, onBlur } }) => (
-                <Input
-                  label="Title"
-                  placeholder={
-                    taskType === "HANDS_ON_HELP"
-                      ? "e.g. Move my furniture"
-                      : "e.g. Pick up my parcel"
-                  }
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  error={errors.title?.message}
-                />
-              )}
-            />
+          {/* Shopping coming-soon notice */}
+          {taskType === "SHOPPING" && (
+            <View
+              style={[
+                styles.comingSoonCard,
+                {
+                  backgroundColor: colors.backgroundSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name="storefront-outline"
+                size={32}
+                color={colors.textTertiary}
+              />
+              <Text style={[styles.comingSoonTitle, { color: colors.text }]}>
+                Shopping is coming soon
+              </Text>
+              <Text
+                style={[styles.comingSoonBody, { color: colors.textSecondary }]}
+              >
+                In-store shopping errands are on the roadmap. For now, use
+                Pickup / Delivery for items that are already ready to collect.
+              </Text>
+            </View>
+          )}
 
-            <Controller
-              control={control}
-              name="description"
-              render={({ field: { value, onChange } }) => (
-                <ChecklistInput
-                  label="Instructions"
-                  placeholder="Enter Instruction and press enter"
-                  value={value ?? ""}
-                  onChange={onChange}
-                  error={errors.description?.message}
-                />
-              )}
-            />
-
-            <Controller
-              control={control}
-              name="firstLocation"
-              render={({ field: { value, onChange } }) => (
-                <AddressPicker
-                  label={
-                    taskType === "HANDS_ON_HELP"
-                      ? "Location"
-                      : "Pickup Location"
-                  }
-                  placeholder={
-                    taskType === "HANDS_ON_HELP"
-                      ? "Search location..."
-                      : "Search pickup address..."
-                  }
-                  value={value}
-                  onSelect={onChange}
-                  onCoordinatesSelect={setPickupCoords}
-                  error={errors.firstLocation?.message}
-                />
-              )}
-            />
-
-            {(taskType === "PICKUP_DELIVERY" || taskType === "SHOPPING") && (
-              <>
-                <Controller
-                  control={control}
-                  name="finalLocation"
-                  render={({ field: { value, onChange } }) => (
-                    <AddressPicker
-                      label="Drop-off Location"
-                      placeholder="Search drop-off address..."
-                      value={value ?? ""}
-                      onSelect={onChange}
-                      onCoordinatesSelect={setDropoffCoords}
-                      error={errors.finalLocation?.message}
-                    />
-                  )}
-                />
-
-                <Controller
-                  control={control}
-                  name="locationReference"
-                  render={({ field: { value, onChange, onBlur } }) => (
-                    <Input
-                      label="Pickup Reference (optional)"
-                      placeholder="e.g. Name: Alice Smith, Code: #PKG-8472"
-                      value={value ?? ""}
-                      onChangeText={onChange}
-                      onBlur={onBlur}
-                    />
-                  )}
-                />
-              </>
-            )}
-
-            {taskType === "HANDS_ON_HELP" && (
+          {/* Shared Fields — hidden when shopping is selected */}
+          {taskType !== "SHOPPING" && (
+            <View style={styles.fields}>
               <Controller
                 control={control}
-                name="estimatedDuration"
+                name="title"
                 render={({ field: { value, onChange, onBlur } }) => (
                   <Input
-                    label="Estimated Duration (hours)"
-                    placeholder="e.g. 2"
-                    value={value ? String(value) : ""}
-                    onChangeText={(t) =>
-                      onChange(t ? parseFloat(t) : undefined)
+                    label="Title"
+                    placeholder={
+                      taskType === "HANDS_ON_HELP"
+                        ? "e.g. Move my furniture"
+                        : "e.g. Pick up my parcel"
                     }
+                    value={value}
+                    onChangeText={onChange}
                     onBlur={onBlur}
-                    keyboardType="decimal-pad"
-                    error={errors.estimatedDuration?.message}
+                    error={errors.title?.message}
                   />
                 )}
               />
-            )}
-          </View>
 
-          {/* Suggested Price Notice */}
-          <View
-            style={[
-              styles.notice,
-              {
-                backgroundColor: colors.backgroundSecondary,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Ionicons
-              name="information-circle-outline"
-              size={18}
-              color={colors.primary}
-            />
-            <Text style={[styles.noticeText, { color: colors.textSecondary }]}>
-              {taskType === "HANDS_ON_HELP"
-                ? "A suggested hourly rate will be shown. Helpers can negotiate the rate before you confirm."
-                : taskType === null
-                  ? "Select a task type above to see pricing info."
-                  : "A suggested price will be calculated based on distance. Helpers can make a counter-offer before you confirm."}
-            </Text>
-          </View>
+              <Controller
+                control={control}
+                name="description"
+                render={({ field: { value, onChange } }) => (
+                  <ChecklistInput
+                    label="Instructions"
+                    placeholder="Enter Instruction and press enter"
+                    value={value ?? ""}
+                    onChange={onChange}
+                    error={errors.description?.message}
+                  />
+                )}
+              />
+
+              <Controller
+                control={control}
+                name="firstLocation"
+                render={({ field: { value, onChange } }) => (
+                  <AddressPicker
+                    label={
+                      taskType === "HANDS_ON_HELP"
+                        ? "Location"
+                        : "Pickup Location"
+                    }
+                    placeholder={
+                      taskType === "HANDS_ON_HELP"
+                        ? "Search location..."
+                        : "Search pickup address..."
+                    }
+                    value={value}
+                    onSelect={onChange}
+                    onCoordinatesSelect={setPickupCoords}
+                    error={errors.firstLocation?.message}
+                  />
+                )}
+              />
+
+              {taskType === "PICKUP_DELIVERY" && (
+                <>
+                  <Controller
+                    control={control}
+                    name="finalLocation"
+                    render={({ field: { value, onChange } }) => (
+                      <AddressPicker
+                        label="Drop-off Location"
+                        placeholder="Search drop-off address..."
+                        value={value ?? ""}
+                        onSelect={onChange}
+                        onCoordinatesSelect={setDropoffCoords}
+                        error={errors.finalLocation?.message}
+                      />
+                    )}
+                  />
+
+                  <Controller
+                    control={control}
+                    name="locationReference"
+                    render={({ field: { value, onChange, onBlur } }) => (
+                      <Input
+                        label="Pickup Reference (optional)"
+                        placeholder="e.g. Name: Alice Smith, Code: #PKG-8472"
+                        value={value ?? ""}
+                        onChangeText={onChange}
+                        onBlur={onBlur}
+                      />
+                    )}
+                  />
+                </>
+              )}
+
+              {taskType === "HANDS_ON_HELP" && (
+                <Controller
+                  control={control}
+                  name="estimatedDuration"
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <Input
+                      label="Estimated Duration (hours)"
+                      placeholder="e.g. 2"
+                      value={value ? String(value) : ""}
+                      onChangeText={(t) =>
+                        onChange(t ? parseFloat(t) : undefined)
+                      }
+                      onBlur={onBlur}
+                      keyboardType="decimal-pad"
+                      error={errors.estimatedDuration?.message}
+                    />
+                  )}
+                />
+              )}
+            </View>
+          )}
+
+          {/* Suggested Price Notice — hidden for shopping */}
+          {taskType !== "SHOPPING" && (
+            <View
+              style={[
+                styles.notice,
+                {
+                  backgroundColor: colors.backgroundSecondary,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name="information-circle-outline"
+                size={18}
+                color={colors.primary}
+              />
+              <Text
+                style={[styles.noticeText, { color: colors.textSecondary }]}
+              >
+                {taskType === "HANDS_ON_HELP"
+                  ? "A suggested hourly rate will be shown. Helpers can negotiate the rate before you confirm."
+                  : taskType === null
+                    ? "Select a task type above to see pricing info."
+                    : "A suggested price will be calculated based on distance. Helpers can make a counter-offer before you confirm."}
+              </Text>
+            </View>
+          )}
         </View>
 
-        {/* Submit */}
-        <TouchableOpacity
-          style={[styles.button, { backgroundColor: colors.primary }]}
-          onPress={handleSubmit(onSubmit)}
-        >
-          <Text style={styles.buttonText}>Continue to Payment</Text>
-        </TouchableOpacity>
+        {/* Submit — hidden for shopping */}
+        {taskType !== "SHOPPING" && (
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: colors.primary }]}
+            onPress={handleSubmit(onSubmit)}
+          >
+            <Text style={styles.buttonText}>Continue to Payment</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -336,4 +374,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  comingSoonBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    marginLeft: "auto",
+  },
+  comingSoonText: { fontSize: 11, fontWeight: "600" },
+  comingSoonCard: {
+    padding: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    gap: 10,
+  },
+  comingSoonTitle: { fontSize: 16, fontWeight: "700", textAlign: "center" },
+  comingSoonBody: { fontSize: 13, textAlign: "center", lineHeight: 20 },
 });

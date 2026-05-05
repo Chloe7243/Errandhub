@@ -21,7 +21,8 @@ import Toast, {
   BaseToast,
 } from "react-native-toast-message";
 import { getToken, getValue } from "@/utils/secure-store";
-import { AuthState, loginUser } from "@/store/slices";
+import { AuthState, loginUser, updateUserState } from "@/store/slices";
+import { usersApi } from "@/store/api/user";
 import { setThemePreference, ThemePreference } from "@/store/slices/theme";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import * as Network from "expo-network";
@@ -83,10 +84,24 @@ function RootLayoutNav() {
           getValue(THEME_KEY),
         ]);
         if (token) {
-          // Decode the JWT locally to hydrate the Redux store without a network round-trip.
-          // Token validity is still enforced by the API on protected requests.
+          // Decode the JWT locally to hydrate the Redux store without a network
+          // round-trip. Token validity is still enforced by the API on protected
+          // requests. avatarUrl and other profile fields in the JWT can be stale
+          // (they were baked in at login time), so we immediately fetch fresh
+          // profile data and merge it in — that way avatar changes persist across
+          // app restarts without requiring a re-login.
           const user = jwtDecode<User>(token);
           dispatch(loginUser({ user, token }));
+
+          // Fire-and-forget: refresh profile data from the server so stale JWT
+          // fields (e.g. avatarUrl) reflect the latest DB state. Failures are
+          // silently ignored — offline startup still works via the JWT-decoded data.
+          const result = await dispatch(
+            usersApi.endpoints.getUserDetails.initiate(undefined, { forceRefetch: true }),
+          );
+          if (result.data?.user) {
+            dispatch(updateUserState(result.data.user));
+          }
         }
         if (savedTheme) {
           dispatch(setThemePreference(savedTheme as ThemePreference));

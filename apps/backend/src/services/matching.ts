@@ -103,6 +103,10 @@ const scheduleHelper = async (errandId: string) => {
     where: {
       isAvailable: true,
       userId: { not: errand.requesterId },
+      // Only consider users whose current role is helper — a user who has
+      // availability ON but is currently acting as a requester should not
+      // receive errand dispatch notifications.
+      user: { role: "helper" },
     },
     select: { userId: true, notificationRadius: true },
   });
@@ -114,6 +118,26 @@ const scheduleHelper = async (errandId: string) => {
   const connectedHelpers = getConnectedHelpers().filter(({ userId }) =>
     availableMap.has(userId),
   );
+
+  const connectedHelperIdSet = new Set(connectedHelpers.map((h) => h.userId));
+
+  // Push-notify every available helper who is NOT currently connected so they
+  // can open the app even if they are in the background or have it closed.
+  // Connected helpers receive the richer Socket.IO dispatch below instead.
+  const offlineAvailableIds = [...availableMap.keys()].filter(
+    (id) => !connectedHelperIdSet.has(id),
+  );
+  if (offlineAvailableIds.length > 0) {
+    await Promise.allSettled(
+      offlineAvailableIds.map((id) =>
+        notifyUser(id, {
+          title: "New errand near you",
+          body: errand.title,
+          data: { errandId: errand.id },
+        }),
+      ),
+    );
+  }
 
   // Fall through (include helper) when location data is missing on either side
   // rather than silently excluding them — better to over-notify than miss a match.
@@ -132,9 +156,11 @@ const scheduleHelper = async (errandId: string) => {
 
   const connectedHelperIds = inRangeHelpers.map(({ userId }) => userId);
 
-  // No connected helpers in range — expire immediately rather than polling.
+  // No connected helpers in range — push notifications were already sent to
+  // offline available helpers above. Leave the errand POSTED so anyone who
+  // opens the app can see it; the 30-min stale expiry handles cleanup.
   if (connectedHelperIds.length === 0) {
-    await expireErrand(errandId);
+    cleanupMatchingState(errandId);
     return;
   }
 
@@ -280,7 +306,7 @@ export const helperAcceptErrand = async (
   if (!errand || errand.status !== "POSTED") return;
 
   clearTimers(state);
-  confirmHelper(errandId, undefined, isFavour);
+  await confirmHelper(errandId, undefined, isFavour);
 };
 
 /**
@@ -369,7 +395,7 @@ export const requestOfferResponse = async (
 
   if (accept) {
     const amount = state.pendingOfferAmount ?? 0;
-    confirmHelper(errandId, amount);
+    await confirmHelper(errandId, amount);
     state.pendingOfferAmount = undefined;
     return;
   }

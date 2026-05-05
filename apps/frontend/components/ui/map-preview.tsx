@@ -131,12 +131,15 @@ const MapPreview = ({ style, ...mapProps }: Props & { style?: ViewStyle }) => {
   return (
     <View style={[styles.container, { borderColor: colors.border }, style]}>
       <WebView
-        source={{ html }}
+        source={{ html, baseUrl: "https://leafletjs.com" }}
         style={styles.webview}
         scrollEnabled={false}
         bounces={false}
         originWhitelist={["*"]}
         javaScriptEnabled
+        domStorageEnabled
+        mixedContentMode="always"
+        allowFileAccess
       />
     </View>
   );

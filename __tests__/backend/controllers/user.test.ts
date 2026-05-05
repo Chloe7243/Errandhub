@@ -1,3 +1,9 @@
+jest.mock("../../../apps/backend/src/lib/stripe", () => ({
+  stripe: {
+    paymentIntents: { cancel: jest.fn().mockResolvedValue(undefined) },
+  },
+}));
+
 jest.mock("../../../apps/backend/src/lib/prisma", () => ({
   prisma: {
     user: {
@@ -51,7 +57,7 @@ const makeRes = () => {
   return res;
 };
 
-const next = jest.fn() as NextFunction;
+const next = jest.fn() as jest.Mock<any, any>;
 
 const dbUser = {
   id: "u1",
@@ -75,8 +81,7 @@ describe("getUser", () => {
   it("calls next(AppError 404) when the user is not found", async () => {
     mockPrismaUser.findUnique.mockResolvedValue(null);
     await getUser(makeReq(), makeRes(), next);
-
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
     expect(err.statusCode).toBe(404);
   });
@@ -100,7 +105,7 @@ describe("savePushToken", () => {
     const req = makeReq({ body: {} });
     await savePushToken(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
     expect(err.statusCode).toBe(400);
   });
@@ -129,7 +134,7 @@ describe("updateAvatar", () => {
     const req = makeReq({ body: {} });
     await updateAvatar(req, makeRes(), next);
 
-    const err = (next as jest.Mock).mock.calls[0][0];
+    const err = next.mock.calls[0][0];
     expect(err).toBeInstanceOf(AppError);
     expect(err.statusCode).toBe(400);
   });

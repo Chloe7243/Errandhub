@@ -1,8 +1,11 @@
-import { AppError, errorHandler } from "../../../apps/backend/src/middleware/errors";
+import {
+  AppError,
+  errorHandler,
+} from "../../../apps/backend/src/middleware/errors";
 import { Request, Response, NextFunction } from "express";
 
 /** Build a minimal mock Response with a chainable status().json() pair. */
-const mockRes = () => {
+const makeRes = () => {
   const res = {} as Response;
   res.status = jest.fn().mockReturnValue(res);
   res.json = jest.fn().mockReturnValue(res);
@@ -10,7 +13,7 @@ const mockRes = () => {
 };
 
 const mockReq = {} as Request;
-const mockNext = jest.fn() as NextFunction;
+const next = jest.fn() as jest.Mock<any, any>;
 
 describe("AppError", () => {
   it("is an instance of Error", () => {
@@ -41,42 +44,42 @@ describe("errorHandler", () => {
   });
 
   it("responds with the AppError's own status code and message", () => {
-    const res = mockRes();
+    const res = makeRes();
     const err = new AppError("Resource not found", 404);
 
-    errorHandler(err, mockReq, res, mockNext);
+    errorHandler(err, mockReq, res, next);
 
     expect(res.status).toHaveBeenCalledWith(404);
     expect(res.json).toHaveBeenCalledWith({ message: "Resource not found" });
   });
 
   it("responds 401 for an Unauthorised AppError", () => {
-    const res = mockRes();
-    errorHandler(new AppError("Unauthorised", 401), mockReq, res, mockNext);
+    const res = makeRes();
+    errorHandler(new AppError("Unauthorised", 401), mockReq, res, next);
 
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ message: "Unauthorised" });
   });
 
   it("responds 500 with a generic message for an unknown Error", () => {
-    const res = mockRes();
-    errorHandler(new Error("DB connection lost"), mockReq, res, mockNext);
+    const res = makeRes();
+    errorHandler(new Error("DB connection lost"), mockReq, res, next);
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith({ message: "Something went wrong" });
   });
 
   it("logs the error to console.error for unknown errors", () => {
-    const res = mockRes();
+    const res = makeRes();
     const err = new Error("Unexpected failure");
-    errorHandler(err, mockReq, res, mockNext);
+    errorHandler(err, mockReq, res, next);
 
     expect(console.error).toHaveBeenCalledWith(err);
   });
 
   it("does not log AppErrors to console.error", () => {
-    const res = mockRes();
-    errorHandler(new AppError("Conflict", 409), mockReq, res, mockNext);
+    const res = makeRes();
+    errorHandler(new AppError("Conflict", 409), mockReq, res, next);
 
     expect(console.error).not.toHaveBeenCalled();
   });

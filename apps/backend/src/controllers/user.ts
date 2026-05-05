@@ -271,14 +271,21 @@ export const deleteAccount = async (
     }
 
     // Delete in dependency order to satisfy FK constraints.
+    // Disputes must be removed before errands because of the Dispute_errandId_fkey
+    // constraint. Cover all three ways a dispute can be linked to this user:
+    // raised by them, on an errand they requested, or on an errand they helped with.
     await prisma.dispute.deleteMany({
       where: {
-        OR: [{ raisedById: userId }, { errand: { requesterId: userId } }],
+        OR: [
+          { raisedById: userId },
+          { errand: { requesterId: userId } },
+          { errand: { helperId: userId } },
+        ],
       },
     });
+    await prisma.userSettings.deleteMany({ where: { userId } });
     await prisma.errand.deleteMany({ where: { requesterId: userId } });
     await prisma.errand.deleteMany({ where: { helperId: userId } });
-    await prisma.userSettings.deleteMany({ where: { userId } });
     await prisma.user.delete({ where: { id: userId } });
 
     res.status(200).json({ message: "Account deleted successfully" });

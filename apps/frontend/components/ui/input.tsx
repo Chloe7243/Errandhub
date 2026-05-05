@@ -21,18 +21,13 @@ import {
  */
 const Input = ({
   label,
-  placeholder,
   secureTextEntry,
   error,
-  value,
-  onChangeText,
-  onBlur,
-  multiline,
   containerStyle,
   inputStyle,
   wrapperStyle,
-  keyboardType,
   leftIcon,
+  ...props
 }: InputProps) => {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? "dark"];
@@ -57,12 +52,6 @@ const Input = ({
       >
         {leftIcon && <View style={styles.iconLeft}>{leftIcon}</View>}
         <TextInput
-          value={value}
-          multiline={multiline}
-          keyboardType={keyboardType}
-          onChangeText={onChangeText}
-          onBlur={onBlur}
-          placeholder={placeholder}
           placeholderTextColor={colors.textTertiary}
           secureTextEntry={hidden}
           style={[
@@ -73,6 +62,7 @@ const Input = ({
             },
             inputStyle,
           ]}
+          {...props}
         />
         {secureTextEntry && (
           <TouchableOpacity onPress={() => setHidden((prev) => !prev)}>
